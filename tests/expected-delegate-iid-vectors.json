@@ -1,0 +1,14 @@
+[
+  {
+    "name": "AddTabButtonClick uses IInspectable result",
+    "sender_class": "Microsoft.UI.Xaml.Controls.TabView",
+    "result_type": "IInspectable",
+    "expected_iid": "13df6907-bbb4-5f16-beac-2938c15e1d85"
+  },
+  {
+    "name": "TabCloseRequested uses TabViewTabCloseRequestedEventArgs",
+    "sender_class": "Microsoft.UI.Xaml.Controls.TabView",
+    "result_type": "Microsoft.UI.Xaml.Controls.TabViewTabCloseRequestedEventArgs",
+    "expected_iid": "7093974b-0900-52ae-afd8-70e5623f4595"
+  }
+]

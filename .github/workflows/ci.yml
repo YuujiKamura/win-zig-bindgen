@@ -29,6 +29,10 @@ jobs:
         shell: pwsh
         run: ./scripts/check-tabview-delegate-iids.ps1
 
+      - name: Check delegate IID vectors
+        shell: pwsh
+        run: ./scripts/check-delegate-iid-vectors.ps1
+
       - name: Script guard tests
         shell: pwsh
         run: ./scripts/test-script-guards.ps1
