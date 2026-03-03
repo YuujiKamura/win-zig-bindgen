@@ -28,3 +28,15 @@ jobs:
       - name: Check tabview delegate IIDs
         shell: pwsh
         run: ./scripts/check-tabview-delegate-iids.ps1
+
+      - name: Script guard tests
+        shell: pwsh
+        run: ./scripts/test-script-guards.ps1
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -AllowClobber
+
+      - name: Lint PowerShell scripts
+        shell: pwsh
+        run: ./scripts/lint-powershell.ps1
