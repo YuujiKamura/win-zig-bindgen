@@ -43,8 +43,9 @@ fn makeMetadataModule(
 ) *std.Build.Module {
     const opt_path = b.option([]const u8, "win_zig_metadata_path", "Path to win-zig-metadata lib.zig");
     if (opt_path) |p| {
+        const resolved = if (std.fs.path.isAbsolute(p)) p else b.pathFromRoot(p);
         return b.createModule(.{
-            .root_source_file = .{ .cwd_relative = p },
+            .root_source_file = .{ .cwd_relative = resolved },
             .target = target,
             .optimize = optimize,
         });
