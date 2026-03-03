@@ -5,6 +5,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Normalize-Eol([string]$s) {
+    return (($s -replace "`r`n", "`n") -replace "`r", "`n")
+}
+
 if (-not $BindgenRoot) { $BindgenRoot = Split-Path -Parent $PSScriptRoot }
 if (-not $MetadataRoot) { $MetadataRoot = Join-Path (Split-Path -Parent $BindgenRoot) "win-zig-metadata" }
 if (-not (Test-Path -LiteralPath $MetadataRoot)) {
@@ -22,7 +26,7 @@ foreach ($f in $files) {
 
     $ca = Get-Content -LiteralPath $a -Raw
     $cb = Get-Content -LiteralPath $b -Raw
-    if ($ca -ne $cb) {
+    if ((Normalize-Eol $ca) -ne (Normalize-Eol $cb)) {
         Write-Host "check-metadata-sync: FAIL ($f differs)"
         exit 1
     }

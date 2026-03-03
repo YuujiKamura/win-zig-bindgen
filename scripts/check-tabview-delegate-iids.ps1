@@ -31,7 +31,7 @@ $expected = (Get-Content -LiteralPath $expectedPath -Raw).Trim()
 $generated = $null
 Push-Location $RepoRoot
 try {
-    $generated = & zig build run -- --emit-tabview-delegate-zig $WinmdPath 2>$null
+    $generated = & zig build run -- --emit-tabview-delegate-zig $WinmdPath
     if ($LASTEXITCODE -ne 0) { throw "winmd2zig emit failed" }
 }
 finally {
@@ -56,4 +56,3 @@ if ($actual -ne $expected) {
 
 Write-Host "check-tabview-delegate-iids: PASS"
 exit 0
-
