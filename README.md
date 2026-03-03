@@ -22,6 +22,10 @@
 - `scripts/winui3-sync-delegate-iids.ps1`
 - `scripts/winui3-delegate-iid-check.ps1`
 
+Notes:
+- `winui3-sync-delegate-iids.ps1` supports `-RepoRoot`, `-ToolDir`, and `-ComPath` to avoid machine-specific absolute paths.
+- Defaults prefer sibling `../ghostty-win` when available.
+
 ## Build Options
 
 - `-Dwin_zig_metadata_path=<path-to-lib.zig>`
