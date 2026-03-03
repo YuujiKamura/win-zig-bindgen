@@ -1,0 +1,537 @@
+[
+  {
+    "id": "001",
+    "kind": "test_raw",
+    "args": "--out core_win.rs --no-comment --in default --filter CoCreateGuid"
+  },
+  {
+    "id": "002",
+    "kind": "test_raw",
+    "args": "--out core_win_flat.rs --no-comment --in default --filter CoCreateGuid --flat"
+  },
+  {
+    "id": "003",
+    "kind": "test_raw",
+    "args": "--out core_sys.rs --no-comment --in default --filter CoCreateGuid --sys"
+  },
+  {
+    "id": "004",
+    "kind": "test_raw",
+    "args": "--out core_sys_flat.rs --no-comment --in default --filter CoCreateGuid --sys --flat"
+  },
+  {
+    "id": "005",
+    "kind": "test_raw",
+    "args": "--out core_sys_no_core.rs --no-comment --in default --filter CoCreateGuid --sys --no-deps"
+  },
+  {
+    "id": "006",
+    "kind": "test_raw",
+    "args": "--out core_sys_flat_no_core.rs --no-comment --in default --filter CoCreateGuid --sys --flat --no-deps"
+  },
+  {
+    "id": "007",
+    "kind": "test",
+    "args": "--out derive_struct.rs --filter DateTime TimeSpan --derive DateTime=PartialOrd"
+  },
+  {
+    "id": "008",
+    "kind": "test",
+    "args": "--out derive_cpp_struct.rs --filter POINT SIZE --derive POINT=PartialOrd"
+  },
+  {
+    "id": "009",
+    "kind": "test",
+    "args": "--out derive_cpp_struct_sys.rs --filter POINT SIZE --sys --derive POINT=Debug"
+  },
+  {
+    "id": "010",
+    "kind": "test",
+    "args": "--out derive_enum.rs --filter AsyncStatus CollectionChange --derive AsyncStatus=PartialOrd"
+  },
+  {
+    "id": "011",
+    "kind": "test",
+    "args": "--out derive_cpp_enum.rs --filter WAIT_EVENT WIN32_ERROR --derive WAIT_EVENT=PartialOrd"
+  },
+  {
+    "id": "012",
+    "kind": "test",
+    "args": "--out derive_edges.rs --filter POINT SIZE --sys --derive POINT=Debug,Eq,PartialEq,PartialOrd,Ord, SIZE="
+  },
+  {
+    "id": "013",
+    "kind": "test",
+    "args": "--out enum_win.rs --filter AsyncStatus"
+  },
+  {
+    "id": "014",
+    "kind": "test",
+    "args": "--out enum_sys.rs --filter AsyncStatus --sys"
+  },
+  {
+    "id": "015",
+    "kind": "test",
+    "args": "--out enum_flags_win.rs --filter ErrorOptions"
+  },
+  {
+    "id": "016",
+    "kind": "test",
+    "args": "--out enum_flags_sys.rs --filter ErrorOptions --sys"
+  },
+  {
+    "id": "017",
+    "kind": "test",
+    "args": "--out enum_cpp_win.rs --filter WAIT_EVENT"
+  },
+  {
+    "id": "018",
+    "kind": "test",
+    "args": "--out enum_cpp_sys.rs --filter WAIT_EVENT --sys"
+  },
+  {
+    "id": "019",
+    "kind": "test",
+    "args": "--out enum_cpp_flags_win.rs --filter GENERIC_ACCESS_RIGHTS"
+  },
+  {
+    "id": "020",
+    "kind": "test",
+    "args": "--out enum_cpp_flags_sys.rs --filter GENERIC_ACCESS_RIGHTS --sys"
+  },
+  {
+    "id": "021",
+    "kind": "test",
+    "args": "--out enum_cpp_scoped_win.rs --filter SECURITY_LOGON_TYPE"
+  },
+  {
+    "id": "022",
+    "kind": "test",
+    "args": "--out enum_cpp_scoped_sys.rs --filter SECURITY_LOGON_TYPE --sys"
+  },
+  {
+    "id": "023",
+    "kind": "test",
+    "args": "--out struct_win.rs --filter RectInt32"
+  },
+  {
+    "id": "024",
+    "kind": "test",
+    "args": "--out struct_sys.rs --filter RectInt32 --sys"
+  },
+  {
+    "id": "025",
+    "kind": "test",
+    "args": "--out struct_cpp_win.rs --filter RECT"
+  },
+  {
+    "id": "026",
+    "kind": "test",
+    "args": "--out struct_cpp_sys.rs --filter RECT --sys"
+  },
+  {
+    "id": "027",
+    "kind": "test",
+    "args": "--out struct_disambiguate.rs --filter Windows.Foundation.Rect"
+  },
+  {
+    "id": "028",
+    "kind": "test",
+    "args": "--out struct_with_generic.rs --filter HttpProgress"
+  },
+  {
+    "id": "029",
+    "kind": "test",
+    "args": "--out struct_with_cpp_interface.rs --filter D3D12_RESOURCE_UAV_BARRIER"
+  },
+  {
+    "id": "030",
+    "kind": "test",
+    "args": "--out struct_with_cpp_interface_sys.rs --filter D3D12_RESOURCE_UAV_BARRIER --sys"
+  },
+  {
+    "id": "031",
+    "kind": "test",
+    "args": "--out struct_arch_a.rs --filter SP_POWERMESSAGEWAKE_PARAMS_A"
+  },
+  {
+    "id": "032",
+    "kind": "test",
+    "args": "--out struct_arch_w.rs --filter SP_POWERMESSAGEWAKE_PARAMS_W"
+  },
+  {
+    "id": "033",
+    "kind": "test",
+    "args": "--out struct_arch_a_sys.rs --sys --filter SP_POWERMESSAGEWAKE_PARAMS_A"
+  },
+  {
+    "id": "034",
+    "kind": "test",
+    "args": "--out struct_arch_w_sys.rs --sys --filter SP_POWERMESSAGEWAKE_PARAMS_W"
+  },
+  {
+    "id": "035",
+    "kind": "test",
+    "args": "--out interface.rs --filter IStringable"
+  },
+  {
+    "id": "036",
+    "kind": "test",
+    "args": "--out interface_sys.rs --filter IStringable --sys"
+  },
+  {
+    "id": "037",
+    "kind": "test",
+    "args": "--out interface_sys_no_core.rs --filter IStringable --sys --no-deps"
+  },
+  {
+    "id": "038",
+    "kind": "test",
+    "args": "--out interface_cpp.rs --filter IPersist"
+  },
+  {
+    "id": "039",
+    "kind": "test",
+    "args": "--out interface_cpp_sys.rs --filter IPersist --sys"
+  },
+  {
+    "id": "040",
+    "kind": "test",
+    "args": "--out interface_cpp_sys_no_core.rs --filter IPersist --sys --no-deps"
+  },
+  {
+    "id": "041",
+    "kind": "test",
+    "args": "--out interface_cpp_derive.rs --filter IPersistFile"
+  },
+  {
+    "id": "042",
+    "kind": "test",
+    "args": "--out interface_cpp_derive_sys.rs --filter IPersistFile --sys"
+  },
+  {
+    "id": "043",
+    "kind": "test",
+    "args": "--out interface_cpp_return_udt.rs --filter ID2D1Bitmap D2D_SIZE_F"
+  },
+  {
+    "id": "044",
+    "kind": "test",
+    "args": "--out interface_generic.rs --filter IAsyncOperation --no-deps"
+  },
+  {
+    "id": "045",
+    "kind": "test",
+    "args": "--out interface_required.rs --filter IAsyncAction --no-deps"
+  },
+  {
+    "id": "046",
+    "kind": "test",
+    "args": "--out interface_required_sys.rs --filter IAsyncAction --sys"
+  },
+  {
+    "id": "047",
+    "kind": "test",
+    "args": "--out interface_required_with_method.rs --filter IAsyncAction AsyncStatus --no-deps"
+  },
+  {
+    "id": "048",
+    "kind": "test",
+    "args": "--out interface_required_with_method_sys.rs --filter IAsyncAction AsyncStatus --sys"
+  },
+  {
+    "id": "049",
+    "kind": "test",
+    "args": "--out interface_iterable.rs --filter IVector --no-deps"
+  },
+  {
+    "id": "050",
+    "kind": "test",
+    "args": "--out interface_array_return.rs --filter IDispatch"
+  },
+  {
+    "id": "051",
+    "kind": "test",
+    "args": "--out fn_win.rs --filter GetTickCount"
+  },
+  {
+    "id": "052",
+    "kind": "test",
+    "args": "--out fn_sys.rs --filter GetTickCount --sys"
+  },
+  {
+    "id": "053",
+    "kind": "test",
+    "args": "--out fn_sys_targets.rs --filter GetTickCount --sys --link windows_targets"
+  },
+  {
+    "id": "054",
+    "kind": "test",
+    "args": "--out fn_sys_extern.rs --filter GetTickCount --sys --sys-fn-extern"
+  },
+  {
+    "id": "055",
+    "kind": "test",
+    "args": "--out fn_sys_extern_ptrs.rs --filter GetTickCount --sys --sys-fn-extern --sys-fn-ptrs"
+  },
+  {
+    "id": "056",
+    "kind": "test",
+    "args": "--out fn_sys_ptrs.rs --filter GetTickCount --sys --sys-fn-ptrs"
+  },
+  {
+    "id": "057",
+    "kind": "test",
+    "args": "--out fn_associated_enum_win.rs --filter CoInitializeEx"
+  },
+  {
+    "id": "058",
+    "kind": "test",
+    "args": "--out fn_associated_enum_sys.rs --filter CoInitializeEx --sys"
+  },
+  {
+    "id": "059",
+    "kind": "test",
+    "args": "--out fn_return_void_win.rs --filter GlobalMemoryStatus"
+  },
+  {
+    "id": "060",
+    "kind": "test",
+    "args": "--out fn_return_void_sys.rs --filter GlobalMemoryStatus --sys"
+  },
+  {
+    "id": "061",
+    "kind": "test",
+    "args": "--out fn_no_return_win.rs --filter FatalExit"
+  },
+  {
+    "id": "062",
+    "kind": "test",
+    "args": "--out fn_no_return_sys.rs --filter FatalExit --sys"
+  },
+  {
+    "id": "063",
+    "kind": "test",
+    "args": "--out fn_result_void_sys.rs --filter SetComputerNameA --sys"
+  },
+  {
+    "id": "064",
+    "kind": "test",
+    "args": "--out delegate.rs --filter DeferralCompletedHandler"
+  },
+  {
+    "id": "065",
+    "kind": "test",
+    "args": "--out delegate_generic.rs --filter EventHandler"
+  },
+  {
+    "id": "066",
+    "kind": "test",
+    "args": "--out delegate_cpp.rs --filter GetProcAddress EnumWindows"
+  },
+  {
+    "id": "067",
+    "kind": "test",
+    "args": "--out delegate_cpp_ref.rs --filter PFN_D3D12_CREATE_DEVICE PFNGETACTIVATIONFACTORY S_OK CLASS_E_CLASSNOTAVAILABLE"
+  },
+  {
+    "id": "068",
+    "kind": "test",
+    "args": "--out delegate_param.rs --filter SetConsoleCtrlHandler"
+  },
+  {
+    "id": "069",
+    "kind": "test",
+    "args": "--out class.rs --filter Deferral"
+  },
+  {
+    "id": "070",
+    "kind": "test",
+    "args": "--out class_with_handler.rs --filter Deferral DeferralCompletedHandler"
+  },
+  {
+    "id": "071",
+    "kind": "test",
+    "args": "--out class_static.rs --filter GuidHelper"
+  },
+  {
+    "id": "072",
+    "kind": "test",
+    "args": "--out class_dep.rs --filter WwwFormUrlDecoder --no-deps"
+  },
+  {
+    "id": "073",
+    "kind": "test",
+    "args": "--out multi.rs --filter HTTP_VERSION"
+  },
+  {
+    "id": "074",
+    "kind": "test",
+    "args": "--out multi_sys.rs --filter HTTP_VERSION --sys"
+  },
+  {
+    "id": "075",
+    "kind": "test",
+    "args": "--out window_long_get_a.rs --filter GetWindowLongPtrA"
+  },
+  {
+    "id": "076",
+    "kind": "test",
+    "args": "--out window_long_get_w.rs --filter GetWindowLongPtrW"
+  },
+  {
+    "id": "077",
+    "kind": "test",
+    "args": "--out window_long_set_a.rs --filter SetWindowLongPtrA"
+  },
+  {
+    "id": "078",
+    "kind": "test",
+    "args": "--out window_long_set_w.rs --filter SetWindowLongPtrW"
+  },
+  {
+    "id": "079",
+    "kind": "test",
+    "args": "--out window_long_get_a_sys.rs --filter GetWindowLongPtrA --sys"
+  },
+  {
+    "id": "080",
+    "kind": "test",
+    "args": "--out window_long_get_w_sys.rs --filter GetWindowLongPtrW --sys"
+  },
+  {
+    "id": "081",
+    "kind": "test",
+    "args": "--out window_long_set_a_sys.rs --filter SetWindowLongPtrA --sys"
+  },
+  {
+    "id": "082",
+    "kind": "test",
+    "args": "--out window_long_set_w_sys.rs --filter SetWindowLongPtrW --sys"
+  },
+  {
+    "id": "083",
+    "kind": "test",
+    "args": "--out reference_struct_filter.rs --filter InkTrailPoint"
+  },
+  {
+    "id": "084",
+    "kind": "test",
+    "args": "--out reference_struct_reference_type.rs --filter InkTrailPoint --reference windows,skip-root,Point"
+  },
+  {
+    "id": "085",
+    "kind": "test",
+    "args": "--out reference_struct_reference_namespace.rs --filter InkTrailPoint --reference windows,skip-root,Windows.Foundation"
+  },
+  {
+    "id": "086",
+    "kind": "test",
+    "args": "--out reference_struct_sys_filter.rs --sys --filter GAMING_DEVICE_MODEL_INFORMATION"
+  },
+  {
+    "id": "087",
+    "kind": "test",
+    "args": "--out reference_struct_sys_reference_type.rs --sys --filter GAMING_DEVICE_MODEL_INFORMATION --reference windows_sys,skip-root,GAMING_DEVICE_VENDOR_ID"
+  },
+  {
+    "id": "088",
+    "kind": "test",
+    "args": "--out reference_struct_sys_reference_namespace.rs --sys --filter GAMING_DEVICE_MODEL_INFORMATION --reference windows_sys,skip-root,Windows.Win32.Gaming"
+  },
+  {
+    "id": "089",
+    "kind": "test",
+    "args": "--out bool.rs --filter EnableMouseInPointer"
+  },
+  {
+    "id": "090",
+    "kind": "test",
+    "args": "--out bool_sys.rs --filter EnableMouseInPointer --sys"
+  },
+  {
+    "id": "091",
+    "kind": "test",
+    "args": "--out bool_sys_no_core.rs --filter EnableMouseInPointer --sys --no-deps"
+  },
+  {
+    "id": "092",
+    "kind": "test",
+    "args": "--out bool_event.rs --filter CreateEventW SetEvent NtWaitForSingleObject WaitForSingleObjectEx --reference windows,skip-root,Windows"
+  },
+  {
+    "id": "093",
+    "kind": "test",
+    "args": "--out bool_event_sans_reference.rs --filter CreateEventW SetEvent NtWaitForSingleObject WaitForSingleObjectEx"
+  },
+  {
+    "id": "094",
+    "kind": "test",
+    "args": "--out ref_params.rs --filter IDynamicConceptProviderConcept IModelObject IKeyStore"
+  },
+  {
+    "id": "095",
+    "kind": "test_raw",
+    "args": "--no-comment --out reference_dependency_flat.rs --filter IMemoryBufferReference --flat"
+  },
+  {
+    "id": "096",
+    "kind": "test_raw",
+    "args": "--no-comment --out reference_dependency_full.rs --filter IMemoryBufferReference"
+  },
+  {
+    "id": "097",
+    "kind": "test_raw",
+    "args": "--no-comment --out reference_dependency_skip_root.rs --filter IMemoryBufferReference"
+  },
+  {
+    "id": "098",
+    "kind": "test_raw",
+    "args": "--no-comment --out reference_dependent_flat.rs --filter IMemoryBuffer --reference crate::reference_dependency_flat,flat,IMemoryBufferReference"
+  },
+  {
+    "id": "099",
+    "kind": "test_raw",
+    "args": "--no-comment --out reference_dependent_full.rs --filter IMemoryBuffer --reference crate::reference_dependency_full,full,IMemoryBufferReference"
+  },
+  {
+    "id": "100",
+    "kind": "test_raw",
+    "args": "--no-comment --out reference_dependent_skip_root.rs --filter IMemoryBuffer --reference crate::reference_dependency_skip_root::Windows,skip-root,IMemoryBufferReference"
+  },
+  {
+    "id": "101",
+    "kind": "test",
+    "args": "--out deps.rs --filter FreeLibrary GetProcAddress LoadLibraryExA LOAD_LIBRARY_SEARCH_DEFAULT_DIRS --sys"
+  },
+  {
+    "id": "102",
+    "kind": "test",
+    "args": "--out sort.rs --filter E_FAIL S_FALSE E_OUTOFMEMORY ERROR_OUTOFMEMORY Windows.Foundation.Rect RECT GetTickCount FatalExit --sys --no-deps"
+  },
+  {
+    "id": "103",
+    "kind": "test_raw",
+    "args": "--out default_default.rs --filter GetTickCount --sys --flat --no-comment --in default"
+  },
+  {
+    "id": "104",
+    "kind": "test_raw",
+    "args": "--out default_assumed.rs --filter GetTickCount --sys --flat --no-comment"
+  },
+  {
+    "id": "105",
+    "kind": "test_raw",
+    "args": "--out comment.rs --in default --filter GetTickCount --sys --flat"
+  },
+  {
+    "id": "106",
+    "kind": "test_raw",
+    "args": "--out comment_no_allow.rs --in default --filter GetTickCount --sys --flat --no-allow"
+  },
+  {
+    "id": "107",
+    "kind": "bindgen",
+    "args": "--out rustfmt_25.rs --rustfmt max_width=25,newline_style=Unix --filter POINT --flat --no-comment --no-allow"
+  }
+]
