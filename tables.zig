@@ -351,3 +351,66 @@ fn rowCursor(info: Info, id: coded.TableId, row: u32) TableError!Cursor {
     if (end > info.data.len) return error.Truncated;
     return .{ .data = info.data[start..end] };
 }
+
+test "parse accepts minimal valid metadata table stream with no tables" {
+    var d: [24]u8 = .{0} ** 24;
+    // reserved=0 at [0..4]
+    d[4] = 2; // major
+    d[5] = 0; // minor
+    d[6] = 0; // heap sizes
+    d[7] = 1; // reserved
+    // valid mask = 0, sorted = 0
+    const info = try parse(&d);
+    try std.testing.expectEqual(@as(u64, 0), info.valid_mask);
+    try std.testing.expectEqual(@as(u32, 0), info.getTable(.TypeDef).row_count);
+}
+
+test "parse rejects non-zero reserved field" {
+    var d: [24]u8 = .{0} ** 24;
+    d[0] = 1;
+    try std.testing.expectError(error.UnsupportedTable, parse(&d));
+}
+
+test "parse detects truncation when row count table is incomplete" {
+    var d: [24]u8 = .{0} ** 24;
+    // valid bit 2 (TypeDef) set, but no room for row count u32.
+    std.mem.writeInt(u64, d[8..][0..8], (@as(u64, 1) << 2), .little);
+    try std.testing.expectError(error.Truncated, parse(&d));
+}
+
+test "parse and read single TypeDef row" {
+    // Header(24) + one row-count(4) + one TypeDef row(14)
+    var d: [42]u8 = .{0} ** 42;
+    d[4] = 2; // major
+    d[5] = 0; // minor
+    d[6] = 0; // heap sizes => 2-byte heap indexes
+    d[7] = 1;
+
+    std.mem.writeInt(u64, d[8..][0..8], (@as(u64, 1) << 2), .little); // valid TypeDef
+    std.mem.writeInt(u64, d[16..][0..8], 0, .little); // sorted
+    std.mem.writeInt(u32, d[24..][0..4], 1, .little); // TypeDef row count
+
+    // Row starts at 28
+    const row: usize = 28;
+    std.mem.writeInt(u32, d[row..][0..4], 0x11223344, .little); // flags
+    std.mem.writeInt(u16, d[row + 4 ..][0..2], 1, .little); // type_name
+    std.mem.writeInt(u16, d[row + 6 ..][0..2], 2, .little); // type_namespace
+    std.mem.writeInt(u16, d[row + 8 ..][0..2], 3, .little); // extends
+    std.mem.writeInt(u16, d[row + 10 ..][0..2], 4, .little); // field_list
+    std.mem.writeInt(u16, d[row + 12 ..][0..2], 5, .little); // method_list
+
+    const info = try parse(&d);
+    const td = try info.readTypeDef(1);
+    try std.testing.expectEqual(@as(u32, 0x11223344), td.flags);
+    try std.testing.expectEqual(@as(u32, 1), td.type_name);
+    try std.testing.expectEqual(@as(u32, 2), td.type_namespace);
+    try std.testing.expectEqual(@as(u32, 3), td.extends);
+    try std.testing.expectEqual(@as(u32, 4), td.field_list);
+    try std.testing.expectEqual(@as(u32, 5), td.method_list);
+}
+
+test "readTypeDef invalid row returns error" {
+    var d: [24]u8 = .{0} ** 24;
+    const info = try parse(&d);
+    try std.testing.expectError(error.InvalidTableRow, info.readTypeDef(1));
+}

@@ -95,3 +95,85 @@ fn readU32(data: []const u8, off: usize) ?u32 {
     if (off + 4 > data.len) return null;
     return std.mem.readInt(u32, data[off..][0..4], .little);
 }
+
+test "rvaToOffset maps through section range" {
+    const info = Info{
+        .data = &([_]u8{0} ** 0x400),
+        .sections = &[_]Section{
+            .{
+                .virtual_address = 0x2000,
+                .virtual_size = 0x100,
+                .raw_ptr = 0x180,
+                .raw_size = 0x200,
+            },
+        },
+        .cli_header_rva = 0,
+        .cli_header_size = 0,
+    };
+    const off = try info.rvaToOffset(0x2010);
+    try std.testing.expectEqual(@as(usize, 0x190), off);
+}
+
+test "rvaToOffset falls back for raw file RVA" {
+    const info = Info{
+        .data = &([_]u8{0} ** 0x200),
+        .sections = &.{},
+        .cli_header_rva = 0,
+        .cli_header_size = 0,
+    };
+    const off = try info.rvaToOffset(0x40);
+    try std.testing.expectEqual(@as(usize, 0x40), off);
+}
+
+test "rvaToOffset returns not mapped for out of range" {
+    const info = Info{
+        .data = &([_]u8{0} ** 0x20),
+        .sections = &.{},
+        .cli_header_rva = 0,
+        .cli_header_size = 0,
+    };
+    try std.testing.expectError(error.RvaNotMapped, info.rvaToOffset(0x2000));
+}
+
+test "parse rejects non-MZ signatures" {
+    var data: [64]u8 = .{0} ** 64;
+    try std.testing.expectError(error.BadDosSignature, parse(std.testing.allocator, &data));
+}
+
+test "parse accepts minimal PE32+ with CLI directory" {
+    var data: [0x400]u8 = .{0} ** 0x400;
+    data[0] = 'M';
+    data[1] = 'Z';
+    // e_lfanew = 0x80
+    std.mem.writeInt(u32, data[0x3c..][0..4], 0x80, .little);
+
+    // PE signature
+    data[0x80] = 'P';
+    data[0x81] = 'E';
+    data[0x82] = 0;
+    data[0x83] = 0;
+
+    const coff_off: usize = 0x84;
+    std.mem.writeInt(u16, data[coff_off + 2 ..][0..2], 1, .little); // sections
+    std.mem.writeInt(u16, data[coff_off + 16 ..][0..2], 0xF0, .little); // optional header size
+
+    const optional_off: usize = coff_off + 20;
+    std.mem.writeInt(u16, data[optional_off..][0..2], 0x20b, .little); // PE32+
+
+    // CLI data directory entry (index 14)
+    const cli_dir_off: usize = optional_off + 112 + (14 * 8);
+    std.mem.writeInt(u32, data[cli_dir_off..][0..4], 0x2000, .little); // CLI RVA
+    std.mem.writeInt(u32, data[cli_dir_off + 4 ..][0..4], 0x48, .little); // CLI size
+
+    // One section header at optional_off + 0xF0
+    const sec_off: usize = optional_off + 0xF0;
+    std.mem.writeInt(u32, data[sec_off + 8 ..][0..4], 0x1000, .little); // virtual size
+    std.mem.writeInt(u32, data[sec_off + 12 ..][0..4], 0x2000, .little); // virtual address
+    std.mem.writeInt(u32, data[sec_off + 16 ..][0..4], 0x200, .little); // raw size
+    std.mem.writeInt(u32, data[sec_off + 20 ..][0..4], 0x180, .little); // raw ptr
+
+    const info = try parse(std.testing.allocator, &data);
+    defer std.testing.allocator.free(info.sections);
+    try std.testing.expectEqual(@as(u32, 0x2000), info.cli_header_rva);
+    try std.testing.expectEqual(@as(usize, 1), info.sections.len);
+}

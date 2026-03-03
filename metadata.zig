@@ -106,3 +106,79 @@ fn readU32(data: []const u8, off: usize) ?u32 {
     if (off + 4 > data.len) return null;
     return std.mem.readInt(u32, data[off..][0..4], .little);
 }
+
+test "align4 rounds up to 4-byte boundary" {
+    try std.testing.expectEqual(@as(u32, 0), align4(0));
+    try std.testing.expectEqual(@as(u32, 4), align4(1));
+    try std.testing.expectEqual(@as(u32, 4), align4(4));
+    try std.testing.expectEqual(@as(u32, 8), align4(5));
+}
+
+test "getStream finds stream by name" {
+    const streams_arr = [_]StreamInfo{
+        .{ .name = "#~", .data = &.{ 1, 2 }, .offset = 1, .size = 2 },
+        .{ .name = "#Strings", .data = &.{ 3 }, .offset = 3, .size = 1 },
+    };
+    const info = Info{
+        .metadata_offset = 0,
+        .metadata_size = 0,
+        .streams = &streams_arr,
+    };
+    try std.testing.expect(info.getStream("#~") != null);
+    try std.testing.expect(info.getStream("#Blob") == null);
+}
+
+test "parse rejects bad metadata signature" {
+    var data: [0x200]u8 = .{0} ** 0x200;
+    // CLI header at 0x40
+    std.mem.writeInt(u32, data[0x40..][0..4], 16, .little);
+    std.mem.writeInt(u32, data[0x48..][0..4], 0x80, .little); // metadata RVA
+    std.mem.writeInt(u32, data[0x4c..][0..4], 0x60, .little); // metadata size
+
+    const p = pe.Info{
+        .data = &data,
+        .sections = &.{},
+        .cli_header_rva = 0x40,
+        .cli_header_size = 16,
+    };
+    try std.testing.expectError(error.BadMetadataSignature, parse(std.testing.allocator, p));
+}
+
+test "parse reads single stream metadata header" {
+    var data: [0x200]u8 = .{0} ** 0x200;
+    // CLI header at 0x40
+    std.mem.writeInt(u32, data[0x40..][0..4], 16, .little);
+    std.mem.writeInt(u32, data[0x48..][0..4], 0x80, .little); // metadata RVA
+    std.mem.writeInt(u32, data[0x4c..][0..4], 0x60, .little); // metadata size
+
+    const md: usize = 0x80;
+    std.mem.writeInt(u32, data[md..][0..4], 0x424A5342, .little); // BSJB
+    std.mem.writeInt(u16, data[md + 4 ..][0..2], 1, .little); // major
+    std.mem.writeInt(u16, data[md + 6 ..][0..2], 1, .little); // minor
+    std.mem.writeInt(u32, data[md + 8 ..][0..4], 0, .little); // reserved
+    std.mem.writeInt(u32, data[md + 12 ..][0..4], 12, .little); // version length
+    @memcpy(data[md + 16 ..][0..12], "v4.0.30319\x00\x00");
+    std.mem.writeInt(u16, data[md + 28 ..][0..2], 0, .little); // flags
+    std.mem.writeInt(u16, data[md + 30 ..][0..2], 1, .little); // stream count
+
+    std.mem.writeInt(u32, data[md + 32 ..][0..4], 0x40, .little); // stream rel offset
+    std.mem.writeInt(u32, data[md + 36 ..][0..4], 4, .little); // stream size
+    @memcpy(data[md + 40 ..][0..3], "#~\x00");
+
+    @memcpy(data[md + 0x40 ..][0..4], &[_]u8{ 0xaa, 0xbb, 0xcc, 0xdd });
+
+    const p = pe.Info{
+        .data = &data,
+        .sections = &.{},
+        .cli_header_rva = 0x40,
+        .cli_header_size = 16,
+    };
+
+    const info = try parse(std.testing.allocator, p);
+    defer std.testing.allocator.free(info.streams);
+    try std.testing.expectEqual(@as(usize, md), info.metadata_offset);
+    try std.testing.expectEqual(@as(usize, 1), info.streams.len);
+    const s = info.getStream("#~") orelse return error.MissingStream;
+    try std.testing.expectEqual(@as(u32, 4), s.size);
+    try std.testing.expectEqualSlices(u8, &.{ 0xaa, 0xbb, 0xcc, 0xdd }, s.data);
+}
