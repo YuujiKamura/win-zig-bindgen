@@ -8,6 +8,9 @@
 - GUID/IID generation
 - Delegate IID emit helpers
 - Shadow parity assets (`shadow/windows-rs`)
+- Metadata source selection:
+  - Prefer sibling repo `../win-zig-metadata/lib.zig`
+  - Fallback to local `metadata_local.zig`
 
 ## Entry Point
 

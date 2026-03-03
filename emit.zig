@@ -1,7 +1,8 @@
 const std = @import("std");
-const tables = @import("tables.zig");
-const streams = @import("streams.zig");
-const coded = @import("coded_index.zig");
+const win_zig_metadata = @import("win_zig_metadata");
+const tables = win_zig_metadata.tables;
+const streams = win_zig_metadata.streams;
+const coded = win_zig_metadata.coded_index;
 const winrt_guid = @import("winrt_guid.zig");
 
 pub const Context = struct {

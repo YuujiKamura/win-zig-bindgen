@@ -1,9 +1,10 @@
 const std = @import("std");
 
-const pe = @import("pe.zig");
-const metadata = @import("metadata.zig");
-const tables = @import("tables.zig");
-const streams = @import("streams.zig");
+const win_zig_metadata = @import("win_zig_metadata");
+const pe = win_zig_metadata.pe;
+const metadata = win_zig_metadata.metadata;
+const tables = win_zig_metadata.tables;
+const streams = win_zig_metadata.streams;
 const emit = @import("emit.zig");
 const resolver = @import("resolver.zig");
 const winrt_guid = @import("winrt_guid.zig");
