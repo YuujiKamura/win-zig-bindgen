@@ -40,6 +40,12 @@ pub fn main() !void {
         const type_name = args.next() orelse return usageDelegate();
         return runFindType(allocator, winmd_path, type_name);
     }
+    if (std.mem.eql(u8, first, "--inspect-event-param")) {
+        const winmd_path = args.next() orelse return usageDelegate();
+        const owner_type = args.next() orelse return usageDelegate();
+        const method_name = args.next() orelse return usageDelegate();
+        return runInspectEventParam(allocator, winmd_path, owner_type, method_name);
+    }
 
     const winmd_path = first;
 
@@ -125,11 +131,13 @@ fn usageDelegate() !void {
         \\  winmd2zig --tabview-delegates <path.winmd>
         \\  winmd2zig --emit-tabview-delegate-zig <path.winmd>
         \\  winmd2zig --find-type <path.winmd> <TypeName>
+        \\  winmd2zig --inspect-event-param <path.winmd> <InterfaceOrRuntimeClass> <MethodName>
         \\Examples:
         \\  winmd2zig --delegate-iid Microsoft.UI.Xaml.winmd Microsoft.UI.Xaml.Controls.TabView IInspectable
         \\  winmd2zig --delegate-iid Microsoft.UI.Xaml.winmd Microsoft.UI.Xaml.Controls.TabView Microsoft.UI.Xaml.Controls.TabViewTabCloseRequestedEventArgs
         \\  winmd2zig --emit-tabview-delegate-zig Microsoft.UI.Xaml.winmd
         \\  winmd2zig --find-type Windows.Win32.winmd IPersist
+        \\  winmd2zig --inspect-event-param Microsoft.UI.Xaml.winmd Microsoft.UI.Xaml.Controls.ITabView add_TabCloseRequested
         \\
     );
     stderr_writer.end() catch |err| switch (err) {
@@ -277,6 +285,287 @@ fn writeGuidAsZig(out: anytype, g: winrt_guid.Guid) !void {
         try out.print("0x{x:0>2}", .{b});
     }
     try out.writeAll(" }");
+}
+
+fn runInspectEventParam(
+    allocator: std.mem.Allocator,
+    winmd_path: []const u8,
+    owner_type: []const u8,
+    method_name: []const u8,
+) !void {
+    const ctx = try loadCtx(allocator, winmd_path);
+    const owner_full = blk: {
+        _ = resolver.findTypeDefRowByFullName(ctx, owner_type) catch {
+            const resolved = try resolver.resolveDefaultInterfaceNameForRuntimeClassAlloc(ctx, allocator, owner_type);
+            break :blk resolved;
+        };
+        break :blk owner_type;
+    };
+
+    const owner_row = try resolver.findTypeDefRowByFullName(ctx, owner_full);
+    const method_row = try findMethodRowByName(ctx, owner_row, method_name);
+
+    var parsed = try parseMethodSigForInspect(allocator, ctx, method_row);
+    defer {
+        allocator.free(parsed.ret_type);
+        for (parsed.param_types.items) |p| allocator.free(p);
+        parsed.param_types.deinit(allocator);
+    }
+
+    var stdout_buf: [8 * 1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
+    const out = &stdout_writer.interface;
+
+    try out.print("owner={s}\nmethod={s}\nreturn={s}\nparam_count={d}\n", .{
+        owner_full, method_name, parsed.ret_type, parsed.param_types.items.len,
+    });
+    for (parsed.param_types.items, 0..) |p, i| {
+        try out.print("param[{d}]={s}\n", .{ i, p });
+        if (try maybeTypeDefGuid(ctx, allocator, p)) |g| {
+            defer allocator.free(g);
+            try out.print("param[{d}]_guid={s}\n", .{ i, g });
+        }
+    }
+
+    const fn_abi = try emitInspectFnAbi(allocator, ctx, method_row);
+    defer allocator.free(fn_abi);
+    try out.print("abi_fn={s}\n", .{fn_abi});
+
+    stdout_writer.end() catch |err| switch (err) {
+        error.FileTooBig => {},
+        else => return err,
+    };
+}
+
+const InspectParsedSig = struct {
+    ret_type: []u8,
+    param_types: std.ArrayList([]u8),
+};
+
+fn parseMethodSigForInspect(
+    allocator: std.mem.Allocator,
+    ctx: resolver.Context,
+    method_row: u32,
+) !InspectParsedSig {
+    const m = try ctx.table_info.readMethodDef(method_row);
+    const sig_blob = try ctx.heaps.getBlob(m.signature);
+    if (sig_blob.len == 0) return error.InvalidArguments;
+
+    var c = InspectSigCursor{ .data = sig_blob };
+    const sig_cc = c.readByte() orelse return error.InvalidArguments;
+    if ((sig_cc & 0x0f) != 0x00 and (sig_cc & 0x0f) != 0x05) return error.InvalidArguments;
+    if ((sig_cc & 0x10) != 0) _ = c.readCompressedUInt() orelse return error.InvalidArguments;
+
+    const param_count = c.readCompressedUInt() orelse return error.InvalidArguments;
+    const ret = try decodeSigTypeHuman(allocator, ctx, &c);
+
+    var params: std.ArrayList([]u8) = .empty;
+    errdefer {
+        for (params.items) |p| allocator.free(p);
+        params.deinit(allocator);
+    }
+    var i: usize = 0;
+    while (i < param_count) : (i += 1) {
+        try params.append(allocator, try decodeSigTypeHuman(allocator, ctx, &c));
+    }
+
+    return .{ .ret_type = ret, .param_types = params };
+}
+
+const InspectSigCursor = struct {
+    data: []const u8,
+    pos: usize = 0,
+
+    fn readByte(self: *InspectSigCursor) ?u8 {
+        if (self.pos >= self.data.len) return null;
+        const b = self.data[self.pos];
+        self.pos += 1;
+        return b;
+    }
+
+    fn readCompressedUInt(self: *InspectSigCursor) ?usize {
+        if (self.pos >= self.data.len) return null;
+        const info = streams.decodeCompressedUInt(self.data[self.pos..]) catch return null;
+        self.pos += info.used;
+        return info.value;
+    }
+};
+
+fn decodeSigTypeHuman(
+    allocator: std.mem.Allocator,
+    ctx: resolver.Context,
+    c: *InspectSigCursor,
+) ![]u8 {
+    const et = c.readByte() orelse return error.InvalidArguments;
+    return switch (et) {
+        0x01 => try allocator.dupe(u8, "void"),
+        0x02 => try allocator.dupe(u8, "bool"),
+        0x03 => try allocator.dupe(u8, "char16"),
+        0x04 => try allocator.dupe(u8, "i8"),
+        0x05 => try allocator.dupe(u8, "u8"),
+        0x06 => try allocator.dupe(u8, "i16"),
+        0x07 => try allocator.dupe(u8, "u16"),
+        0x08 => try allocator.dupe(u8, "i32"),
+        0x09 => try allocator.dupe(u8, "u32"),
+        0x0a => try allocator.dupe(u8, "i64"),
+        0x0b => try allocator.dupe(u8, "u64"),
+        0x0c => try allocator.dupe(u8, "f32"),
+        0x0d => try allocator.dupe(u8, "f64"),
+        0x0e => try allocator.dupe(u8, "HSTRING"),
+        0x0f => blk: {
+            const inner = try decodeSigTypeHuman(allocator, ctx, c);
+            defer allocator.free(inner);
+            break :blk try std.fmt.allocPrint(allocator, "*{s}", .{inner});
+        },
+        0x10 => blk: {
+            const inner = try decodeSigTypeHuman(allocator, ctx, c);
+            defer allocator.free(inner);
+            break :blk try std.fmt.allocPrint(allocator, "&{s}", .{inner});
+        },
+        0x1f, 0x20 => blk: {
+            _ = c.readCompressedUInt() orelse return error.InvalidArguments;
+            break :blk try decodeSigTypeHuman(allocator, ctx, c);
+        },
+        0x11, 0x12 => blk: {
+            const coded_idx = c.readCompressedUInt() orelse return error.InvalidArguments;
+            const tdor = try @import("coded_index.zig").decodeTypeDefOrRef(@intCast(coded_idx));
+            const full = try resolveTypeDefOrRefNameHuman(allocator, ctx, tdor) orelse "unknown";
+            if (std.mem.eql(u8, full, "unknown")) break :blk try allocator.dupe(u8, full);
+            defer allocator.free(full);
+            break :blk try allocator.dupe(u8, full);
+        },
+        0x1d => blk: {
+            const inner = try decodeSigTypeHuman(allocator, ctx, c);
+            defer allocator.free(inner);
+            break :blk try std.fmt.allocPrint(allocator, "[]{s}", .{inner});
+        },
+        0x13, 0x1e => blk: {
+            _ = c.readCompressedUInt() orelse return error.InvalidArguments;
+            break :blk try allocator.dupe(u8, "generic");
+        },
+        0x14 => blk: {
+            const inner = try decodeSigTypeHuman(allocator, ctx, c);
+            defer allocator.free(inner);
+            _ = c.readCompressedUInt() orelse return error.InvalidArguments; // rank
+            const num_sizes = c.readCompressedUInt() orelse return error.InvalidArguments;
+            var i: usize = 0;
+            while (i < num_sizes) : (i += 1) _ = c.readCompressedUInt() orelse return error.InvalidArguments;
+            const num_lbounds = c.readCompressedUInt() orelse return error.InvalidArguments;
+            i = 0;
+            while (i < num_lbounds) : (i += 1) _ = c.readCompressedUInt() orelse return error.InvalidArguments;
+            break :blk try std.fmt.allocPrint(allocator, "array({s})", .{inner});
+        },
+        0x15 => blk: {
+            _ = c.readByte() orelse return error.InvalidArguments; // CLASS or VALUETYPE
+            const coded_idx = c.readCompressedUInt() orelse return error.InvalidArguments;
+            const tdor = try @import("coded_index.zig").decodeTypeDefOrRef(@intCast(coded_idx));
+            const base_name_opt = try resolveTypeDefOrRefNameHuman(allocator, ctx, tdor);
+            const base_name = if (base_name_opt) |bn| bn else try allocator.dupe(u8, "genericinst");
+            defer allocator.free(base_name);
+            const argc = c.readCompressedUInt() orelse return error.InvalidArguments;
+            var args: std.ArrayList([]u8) = .empty;
+            defer {
+                for (args.items) |a| allocator.free(a);
+                args.deinit(allocator);
+            }
+            var i: usize = 0;
+            while (i < argc) : (i += 1) {
+                const arg = try decodeSigTypeHuman(allocator, ctx, c);
+                try args.append(allocator, arg);
+            }
+            if (args.items.len == 0) {
+                break :blk try allocator.dupe(u8, base_name);
+            }
+            var buf: std.ArrayList(u8) = .empty;
+            defer buf.deinit(allocator);
+            const w = buf.writer(allocator);
+            try w.print("{s}<", .{base_name});
+            for (args.items, 0..) |a, idx| {
+                if (idx != 0) try w.writeAll(", ");
+                try w.writeAll(a);
+            }
+            try w.writeAll(">");
+            break :blk try buf.toOwnedSlice(allocator);
+        },
+        0x18 => try allocator.dupe(u8, "isize"),
+        0x19 => try allocator.dupe(u8, "usize"),
+        0x1c => try allocator.dupe(u8, "object"),
+        else => try std.fmt.allocPrint(allocator, "et(0x{x})", .{et}),
+    };
+}
+
+fn resolveTypeDefOrRefNameHuman(
+    allocator: std.mem.Allocator,
+    ctx: resolver.Context,
+    tdor: @import("coded_index.zig").Decoded,
+) !?[]u8 {
+    return switch (tdor.table) {
+        .TypeDef => blk: {
+            const td = try ctx.table_info.readTypeDef(tdor.row);
+            const ns = try ctx.heaps.getString(td.type_namespace);
+            const name = try ctx.heaps.getString(td.type_name);
+            break :blk try std.fmt.allocPrint(allocator, "{s}.{s}", .{ ns, name });
+        },
+        .TypeRef => blk: {
+            const tr = try ctx.table_info.readTypeRef(tdor.row);
+            const ns = try ctx.heaps.getString(tr.type_namespace);
+            const name = try ctx.heaps.getString(tr.type_name);
+            break :blk try std.fmt.allocPrint(allocator, "{s}.{s}", .{ ns, name });
+        },
+        else => null,
+    };
+}
+
+fn findMethodRowByName(ctx: resolver.Context, owner_row: u32, method_name: []const u8) !u32 {
+    const owner = try ctx.table_info.readTypeDef(owner_row);
+    const method_table = ctx.table_info.getTable(.MethodDef);
+    const start = owner.method_list;
+    const end_exclusive = if (owner_row < ctx.table_info.getTable(.TypeDef).row_count)
+        (try ctx.table_info.readTypeDef(owner_row + 1)).method_list
+    else
+        method_table.row_count + 1;
+
+    var row = start;
+    while (row < end_exclusive) : (row += 1) {
+        const m = try ctx.table_info.readMethodDef(row);
+        const name = try ctx.heaps.getString(m.name);
+        if (std.mem.eql(u8, name, method_name)) return row;
+    }
+    return error.TypeNotFound;
+}
+
+fn maybeTypeDefGuid(ctx: resolver.Context, allocator: std.mem.Allocator, full_name: []const u8) !?[]u8 {
+    const row = resolver.findTypeDefRowByFullName(ctx, full_name) catch return null;
+    const g = resolver.extractGuidForTypeDef(ctx, row) catch return null;
+    const s = try g.toDashedLowerAlloc(allocator);
+    return s;
+}
+
+fn emitInspectFnAbi(allocator: std.mem.Allocator, ctx: resolver.Context, method_row: u32) ![]u8 {
+    const m = try ctx.table_info.readMethodDef(method_row);
+    const sig_blob = try ctx.heaps.getBlob(m.signature);
+    if (sig_blob.len == 0) return allocator.dupe(u8, "unavailable");
+
+    var c = InspectSigCursor{ .data = sig_blob };
+    const sig_cc = c.readByte() orelse return allocator.dupe(u8, "unavailable");
+    if ((sig_cc & 0x0f) != 0x00 and (sig_cc & 0x0f) != 0x05) return allocator.dupe(u8, "unavailable");
+    if ((sig_cc & 0x10) != 0) _ = c.readCompressedUInt() orelse return allocator.dupe(u8, "unavailable");
+    const param_count = c.readCompressedUInt() orelse return allocator.dupe(u8, "unavailable");
+    const ret = try decodeSigTypeHuman(allocator, ctx, &c);
+    defer allocator.free(ret);
+
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(allocator);
+    const w = out.writer(allocator);
+    try w.print("fn(this", .{});
+    var i: usize = 0;
+    while (i < param_count) : (i += 1) {
+        const p = try decodeSigTypeHuman(allocator, ctx, &c);
+        defer allocator.free(p);
+        try w.print(", p{d}:{s}", .{ i, p });
+    }
+    try w.print(") -> {s}", .{ret});
+    return out.toOwnedSlice(allocator);
 }
 
 fn runFindType(allocator: std.mem.Allocator, winmd_path: []const u8, type_name: []const u8) !void {
@@ -439,4 +728,26 @@ test "tabview ABI shape includes out params (if installed)" {
 
     try std.testing.expect(std.mem.indexOf(u8, out.items, "get_SelectedIndex: *const fn (*anyopaque, *i32) callconv(.winapi) HRESULT") != null);
     try std.testing.expect(std.mem.indexOf(u8, out.items, "add_TabCloseRequested: *const fn (*anyopaque, ?*anyopaque, *EventRegistrationToken) callconv(.winapi) HRESULT") != null);
+}
+
+test "inspect-event-param resolves typed handler for tab close (if installed)" {
+    const winmd_path = findWindowsAppSdkXamlWinmd() catch return error.SkipZigTest;
+    if (winmd_path.len == 0) return error.SkipZigTest;
+    defer std.testing.allocator.free(winmd_path);
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const ctx = try loadCtx(alloc, winmd_path);
+    const owner_row = try resolver.findTypeDefRowByFullName(ctx, "Microsoft.UI.Xaml.Controls.ITabView");
+    const method_row = try findMethodRowByName(ctx, owner_row, "add_TabCloseRequested");
+    var parsed = try parseMethodSigForInspect(alloc, ctx, method_row);
+    defer {
+        alloc.free(parsed.ret_type);
+        for (parsed.param_types.items) |p| alloc.free(p);
+        parsed.param_types.deinit(alloc);
+    }
+    try std.testing.expectEqual(@as(usize, 1), parsed.param_types.items.len);
+    try std.testing.expect(std.mem.indexOf(u8, parsed.param_types.items[0], "TypedEventHandler`2<") != null);
 }
