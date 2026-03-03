@@ -88,3 +88,86 @@ test "guid heap is 1-based" {
     try std.testing.expectEqual(@as(u8, 16), g[0]);
     try std.testing.expectEqual(@as(u8, 31), g[15]);
 }
+
+test "getString returns empty for index 0" {
+    const heaps = Heaps{
+        .strings = "a\x00b\x00",
+        .blob = &.{},
+        .guid = &.{},
+    };
+    const s = try heaps.getString(0);
+    try std.testing.expectEqualStrings("", s);
+}
+
+test "getString invalid index returns error" {
+    const heaps = Heaps{
+        .strings = "abc\x00",
+        .blob = &.{},
+        .guid = &.{},
+    };
+    try std.testing.expectError(error.InvalidIndex, heaps.getString(10));
+}
+
+test "getString truncated returns error" {
+    const heaps = Heaps{
+        .strings = "abc",
+        .blob = &.{},
+        .guid = &.{},
+    };
+    try std.testing.expectError(error.Truncated, heaps.getString(1));
+}
+
+test "decodeCompressedUInt 1-byte form" {
+    const x = try decodeCompressedUInt(&.{0x7f});
+    try std.testing.expectEqual(@as(usize, 0x7f), x.value);
+    try std.testing.expectEqual(@as(usize, 1), x.used);
+}
+
+test "decodeCompressedUInt 2-byte form" {
+    const x = try decodeCompressedUInt(&.{ 0x81, 0x23 });
+    try std.testing.expectEqual(@as(usize, 0x0123), x.value);
+    try std.testing.expectEqual(@as(usize, 2), x.used);
+}
+
+test "decodeCompressedUInt 4-byte form" {
+    const x = try decodeCompressedUInt(&.{ 0xC0, 0x12, 0x34, 0x56 });
+    try std.testing.expectEqual(@as(usize, 0x00123456), x.value);
+    try std.testing.expectEqual(@as(usize, 4), x.used);
+}
+
+test "decodeCompressedUInt invalid and truncated forms" {
+    try std.testing.expectError(error.InvalidCompressedInt, decodeCompressedUInt(&.{}));
+    try std.testing.expectError(error.InvalidCompressedInt, decodeCompressedUInt(&.{0x80}));
+    try std.testing.expectError(error.InvalidCompressedInt, decodeCompressedUInt(&.{ 0xC0, 0x01 }));
+    try std.testing.expectError(error.InvalidCompressedInt, decodeCompressedUInt(&.{0xF0}));
+}
+
+test "getBlob returns empty for index 0 and invalid for out of range" {
+    const heaps = Heaps{
+        .strings = &.{},
+        .blob = &.{ 0x00, 0x01, 0xaa },
+        .guid = &.{},
+    };
+    const e = try heaps.getBlob(0);
+    try std.testing.expectEqual(@as(usize, 0), e.len);
+    try std.testing.expectError(error.InvalidIndex, heaps.getBlob(99));
+}
+
+test "getBlob truncated payload returns error" {
+    const heaps = Heaps{
+        .strings = &.{},
+        .blob = &.{ 0x00, 0x03, 0xaa }, // length says 3 but only 1 byte present
+        .guid = &.{},
+    };
+    try std.testing.expectError(error.Truncated, heaps.getBlob(1));
+}
+
+test "getGuid invalid indexes return error" {
+    const heaps = Heaps{
+        .strings = &.{},
+        .blob = &.{},
+        .guid = &.{ 0x00, 0x01, 0x02 },
+    };
+    try std.testing.expectError(error.InvalidIndex, heaps.getGuid(0));
+    try std.testing.expectError(error.InvalidIndex, heaps.getGuid(1));
+}

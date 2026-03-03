@@ -127,3 +127,52 @@ test "coded index width grows to 4 bytes" {
     const size = codedIndexSize(rows, 2, &.{ .TypeDef, .TypeRef, .TypeSpec });
     try std.testing.expectEqual(@as(u8, 4), size);
 }
+
+test "decode TypeDefOrRef invalid tag returns error" {
+    try std.testing.expectError(error.InvalidTag, decodeTypeDefOrRef((1 << 2) | 3));
+}
+
+test "coded index width stays 2 bytes at threshold" {
+    var rows = std.mem.zeroes([64]u32);
+    // For tag_bits=2, max small rows = (1 << 14) - 1.
+    rows[@intFromEnum(TableId.TypeDef)] = (1 << 14) - 1;
+    const size = codedIndexSize(rows, 2, &.{ .TypeDef, .TypeRef, .TypeSpec });
+    try std.testing.expectEqual(@as(u8, 2), size);
+}
+
+test "coded index width becomes 4 bytes above threshold" {
+    var rows = std.mem.zeroes([64]u32);
+    rows[@intFromEnum(TableId.TypeRef)] = (1 << 14);
+    const size = codedIndexSize(rows, 2, &.{ .TypeDef, .TypeRef, .TypeSpec });
+    try std.testing.expectEqual(@as(u8, 4), size);
+}
+
+test "decode HasCustomAttribute maps methoddef tag" {
+    const x = try decodeHasCustomAttribute((77 << 5) | 0);
+    try std.testing.expectEqual(TableId.MethodDef, x.table);
+    try std.testing.expectEqual(@as(u32, 77), x.row);
+}
+
+test "decode HasCustomAttribute maps methodspec tag" {
+    const x = try decodeHasCustomAttribute((9 << 5) | 21);
+    try std.testing.expectEqual(TableId.MethodSpec, x.table);
+    try std.testing.expectEqual(@as(u32, 9), x.row);
+}
+
+test "decode HasCustomAttribute invalid tag returns error" {
+    try std.testing.expectError(error.InvalidTag, decodeHasCustomAttribute((1 << 5) | 31));
+}
+
+test "decode CustomAttributeType maps methoddef and memberref" {
+    const m = try decodeCustomAttributeType((42 << 3) | 2);
+    try std.testing.expectEqual(TableId.MethodDef, m.table);
+    try std.testing.expectEqual(@as(u32, 42), m.row);
+
+    const r = try decodeCustomAttributeType((24 << 3) | 3);
+    try std.testing.expectEqual(TableId.MemberRef, r.table);
+    try std.testing.expectEqual(@as(u32, 24), r.row);
+}
+
+test "decode CustomAttributeType invalid tag returns error" {
+    try std.testing.expectError(error.InvalidTag, decodeCustomAttributeType((2 << 3) | 1));
+}

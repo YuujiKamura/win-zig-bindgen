@@ -219,3 +219,68 @@ test "parseGuidText accepts dashed and braced forms" {
     try std.testing.expectEqualStrings("7093974b-0900-52ae-afd8-70e5623f4595", sa);
     try std.testing.expectEqualStrings("7093974b-0900-52ae-afd8-70e5623f4595", sb);
 }
+
+test "Guid blob roundtrip preserves bytes" {
+    const raw: [16]u8 = .{
+        0x78, 0x56, 0x34, 0x12, 0xBC, 0x9A, 0xF0, 0xDE,
+        1,    2,    3,    4,    5,    6,    7,    8,
+    };
+    const g = Guid.fromBlob(raw);
+    const out = g.toBlob();
+    try std.testing.expectEqualSlices(u8, &raw, &out);
+}
+
+test "formatDashedLower prints lowercase with padding" {
+    const g = Guid{
+        .data1 = 0x1,
+        .data2 = 0x2,
+        .data3 = 0x3,
+        .data4 = .{ 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xA, 0xB },
+    };
+    const s = try g.toDashedLowerAlloc(std.testing.allocator);
+    defer std.testing.allocator.free(s);
+    try std.testing.expectEqualStrings("00000001-0002-0003-0405-060708090a0b", s);
+}
+
+test "guidFromSignature is deterministic and versioned UUIDv5-like" {
+    const a = guidFromSignature("pinterface({9de1c534-6ae1-11e0-84e1-18a905bcc53f};x;y)");
+    const b = guidFromSignature("pinterface({9de1c534-6ae1-11e0-84e1-18a905bcc53f};x;y)");
+    const c = guidFromSignature("pinterface({9de1c534-6ae1-11e0-84e1-18a905bcc53f};x;z)");
+
+    try std.testing.expectEqual(a.data1, b.data1);
+    try std.testing.expectEqual(a.data2, b.data2);
+    try std.testing.expectEqual(a.data3, b.data3);
+    try std.testing.expectEqualSlices(u8, &a.data4, &b.data4);
+    try std.testing.expect(a.data1 != c.data1 or a.data2 != c.data2 or a.data3 != c.data3 or !std.mem.eql(u8, &a.data4, &c.data4));
+    try std.testing.expectEqual(@as(u16, 5), (a.data3 >> 12) & 0xF);
+}
+
+test "classSignatureAlloc formats runtime class signature" {
+    const g = Guid{
+        .data1 = 0x12345678,
+        .data2 = 0x9abc,
+        .data3 = 0xdef0,
+        .data4 = .{ 1, 2, 3, 4, 5, 6, 7, 8 },
+    };
+    const s = try classSignatureAlloc(std.testing.allocator, "Windows.Foo.Bar", g);
+    defer std.testing.allocator.free(s);
+    try std.testing.expectEqualStrings("rc(Windows.Foo.Bar;{12345678-9abc-def0-0102-030405060708})", s);
+}
+
+test "typedEventHandlerIid is deterministic for same inputs" {
+    const alloc = std.testing.allocator;
+    const x = try typedEventHandlerIid("rc(A;{aaaaaaaa-0000-0000-0000-000000000000})", "cinterface(IInspectable)", alloc);
+    const y = try typedEventHandlerIid("rc(A;{aaaaaaaa-0000-0000-0000-000000000000})", "cinterface(IInspectable)", alloc);
+    const xs = try x.toDashedLowerAlloc(alloc);
+    defer alloc.free(xs);
+    const ys = try y.toDashedLowerAlloc(alloc);
+    defer alloc.free(ys);
+    try std.testing.expectEqualStrings(xs, ys);
+}
+
+test "parseGuidText rejects malformed inputs" {
+    try std.testing.expectError(error.InvalidGuidText, parseGuidText("7093974b090052aeafd870e5623f4595"));
+    try std.testing.expectError(error.InvalidGuidText, parseGuidText("7093974b-0900-52ae-afd8-70e5623f459"));
+    try std.testing.expectError(error.InvalidGuidText, parseGuidText("7093974b-0900-52ae-afd8-70e5623f459x"));
+    try std.testing.expectError(error.InvalidGuidText, parseGuidText("{7093974b-0900-52ae-afd8-70e5623f4595"));
+}
