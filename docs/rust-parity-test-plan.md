@@ -47,3 +47,21 @@ Notes:
 - `status=mapped` entries must point to concrete Zig test titles.
 - `status=planned|blocked` entries must include a reason.
 - Red-test harness for unimplemented function-generation scope (Rust IDs 051-063): `tests/red_function_generation.zig` (`zig build test-red`).
+
+## Daily operation (single command)
+
+Use one command as the canonical flow:
+
+```powershell
+zig build gate
+```
+
+What this does in order:
+1. Regenerates `docs/rust-parity-case-map.json` from Rust corpus + Zig test corpus.
+2. Runs unit tests and RED parity tests.
+3. Runs parity checks/scripts, including strict map validation.
+
+Strict map validation rules:
+- every Rust case ID must exist in the map exactly once.
+- by default, `planned` and `blocked` entries are treated as failure.
+- use `-AllowPlanned` only for temporary local debugging, never in CI.

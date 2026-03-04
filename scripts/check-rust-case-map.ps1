@@ -1,7 +1,8 @@
 param(
     [string]$RepoRoot = "",
     [string]$MapPath = "",
-    [int]$MinMapped = 9
+    [int]$MinMapped = 0,
+    [switch]$AllowPlanned
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,8 +37,10 @@ $seen = @{}
 $mappedCount = 0
 $plannedCount = 0
 $blockedCount = 0
+$plannedIds = New-Object System.Collections.Generic.List[string]
+$blockedIds = New-Object System.Collections.Generic.List[string]
 
-$testLines = rg -n '^test\s+"' $RepoRoot -g '*.zig' --glob '!shadow/**' --glob '!.zig-cache/**'
+$testLines = rg -n '^test\s+' $RepoRoot -g '*.zig' --glob '!shadow/**' --glob '!.zig-cache/**'
 $zigTests = @{}
 foreach ($line in $testLines) {
     if ($line -match '^.+?:\d+:test\s+"(.+)"\s*\{?$') {
@@ -72,19 +75,40 @@ foreach ($entry in $map) {
         }
     } elseif ($status -eq "planned") {
         $plannedCount += 1
+        $plannedIds.Add($id)
         if (-not [string]$entry.reason) {
             throw "planned entry must include reason: id=$id"
         }
     } else {
         $blockedCount += 1
+        $blockedIds.Add($id)
         if (-not [string]$entry.reason) {
             throw "blocked entry must include reason: id=$id"
         }
     }
 }
 
+$missing = New-Object System.Collections.Generic.List[string]
+foreach ($c in $cases) {
+    $cid = [string]$c.id
+    if (-not $seen.ContainsKey($cid)) {
+        $missing.Add($cid)
+    }
+}
+
+if ($missing.Count -gt 0) {
+    $sample = ($missing | Select-Object -First 20) -join ","
+    throw "map missing case ids: count=$($missing.Count) sample=[$sample]"
+}
+
 if ($mappedCount -lt $MinMapped) {
     throw "mapped case count dropped below threshold: mapped=$mappedCount min=$MinMapped"
+}
+
+if ((-not $AllowPlanned) -and ($plannedCount -gt 0 -or $blockedCount -gt 0)) {
+    $plannedSample = ($plannedIds | Select-Object -First 20) -join ","
+    $blockedSample = ($blockedIds | Select-Object -First 20) -join ","
+    throw "non-mapped entries present: planned=$plannedCount blocked=$blockedCount planned_ids=[$plannedSample] blocked_ids=[$blockedSample]"
 }
 
 Write-Host ("rust-case-map: PASS (mapped={0}, planned={1}, blocked={2}, total_cases={3})" -f $mappedCount, $plannedCount, $blockedCount, $cases.Count)
