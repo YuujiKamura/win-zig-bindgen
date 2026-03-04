@@ -36,3 +36,14 @@ Expand selected cases until the maintained parity set count reaches Rust case co
 Tracking rule:
 - keep a single mapping file of `rust_case -> zig_parity_test`
 - CI should fail if mapped case count decreases
+
+## Current mapping artifact
+
+- Mapping file: `docs/rust-parity-case-map.json`
+- Validator: `scripts/check-rust-case-map.ps1`
+- CI gate: `Check Rust parity case map`
+
+Notes:
+- `status=mapped` entries must point to concrete Zig test titles.
+- `status=planned|blocked` entries must include a reason.
+- Red-test harness for unimplemented function-generation scope (Rust IDs 051-063): `tests/red_function_generation.zig` (`zig build test-red`).

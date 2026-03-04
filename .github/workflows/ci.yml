@@ -18,24 +18,8 @@ jobs:
       - name: Build
         run: zig build
 
-      - name: Unit tests
-        run: zig build test
-
-      - name: Check metadata sync
-        shell: pwsh
-        run: ./scripts/check-metadata-sync.ps1
-
-      - name: Check tabview delegate IIDs
-        shell: pwsh
-        run: ./scripts/check-tabview-delegate-iids.ps1
-
-      - name: Check delegate IID vectors
-        shell: pwsh
-        run: ./scripts/check-delegate-iid-vectors.ps1
-
-      - name: Script guard tests
-        shell: pwsh
-        run: ./scripts/test-script-guards.ps1
+      - name: Quality gate
+        run: zig build gate
 
       - name: Install PSScriptAnalyzer
         shell: pwsh

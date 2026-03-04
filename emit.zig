@@ -16,11 +16,76 @@ const MethodMeta = struct {
     unique_name: []const u8,
 };
 
+pub fn writePrologue(writer: anytype) !void {
+    try writer.writeAll(
+        \\//! WinUI 3 COM interface definitions for Zig.
+        \\//! GENERATED CODE - DO NOT EDIT.
+        \\//! Manual/Native interop interfaces should be maintained in a separate file (e.g. native_interop.zig).
+        \\
+        \\const winrt = @import("winrt.zig");
+        \\const os = @import("os.zig");
+        \\const GUID = winrt.GUID;
+        \\const HRESULT = winrt.HRESULT;
+        \\const HSTRING = winrt.HSTRING;
+        \\const WinRTError = winrt.WinRTError;
+        \\const hrCheck = winrt.hrCheck;
+        \\const EventRegistrationToken = i64;
+        \\
+        \\pub const S_OK: HRESULT = 0;
+        \\pub const E_NOINTERFACE: HRESULT = @bitCast(@as(u32, 0x80004002));
+        \\
+        \\pub const VtblPlaceholder = ?*const anyopaque;
+        \\
+        \\// Helper for COM release
+        \\pub fn comRelease(ptr: anytype) void {
+        \\    const obj: *IUnknown = @ptrCast(@alignCast(ptr));
+        \\    _ = obj.lpVtbl.Release(@ptrCast(obj));
+        \\}
+        \\
+        \\// Helper for COM QueryInterface
+        \\pub fn comQueryInterface(ptr: anytype, comptime T: type) WinRTError!*T {
+        \\    const obj: *IUnknown = @ptrCast(@alignCast(ptr));
+        \\    var out: ?*anyopaque = null;
+        \\    try hrCheck(obj.lpVtbl.QueryInterface(@ptrCast(obj), &T.IID, &out));
+        \\    return @ptrCast(@alignCast(out.?));
+        \\}
+        \\
+        \\pub const IUnknown = extern struct {
+        \\    pub const IID = GUID{ .Data1 = 0x00000000, .Data2 = 0x0000, .Data3 = 0x0000, .Data4 = .{ 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46 } };
+        \\    lpVtbl: *const VTable,
+        \\    pub const VTable = extern struct {
+        \\        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,
+        \\        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,
+        \\        Release: *const fn (*anyopaque) callconv(.winapi) u32,
+        \\    };
+        \\    pub fn release(self: *@This()) void { comRelease(self); }
+        \\    pub fn queryInterface(self: *@This(), comptime T: type) WinRTError!*T { return comQueryInterface(self, T); }
+        \\};
+        \\
+        \\pub const IInspectable = extern struct {
+        \\    pub const IID = GUID{ .Data1 = 0xAFDBDF05, .Data2 = 0x2D12, .Data3 = 0x4D31, .Data4 = .{ 0x84, 0x1F, 0x72, 0x71, 0x50, 0x51, 0x46, 0x46 } };
+        \\    lpVtbl: *const VTable,
+        \\    pub const VTable = extern struct {
+        \\        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,
+        \\        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,
+        \\        Release: *const fn (*anyopaque) callconv(.winapi) u32,
+        \\        GetIids: VtblPlaceholder,
+        \\        GetRuntimeClassName: VtblPlaceholder,
+        \\        GetTrustLevel: VtblPlaceholder,
+        \\    };
+        \\    pub fn release(self: *@This()) void { comRelease(self); }
+        \\    pub fn queryInterface(self: *@This(), comptime T: type) WinRTError!*T { return comQueryInterface(self, T); }
+        \\};
+        \\
+        \\
+    );
+}
+
 pub fn emitInterface(
     allocator: std.mem.Allocator,
     writer: anytype,
     ctx: Context,
-    source_path: []const u8,
+    _: []const u8,
     interface_name: []const u8,
 ) !void {
     const type_row = try findTypeDefRow(ctx, interface_name);
@@ -60,8 +125,6 @@ pub fn emitInterface(
         });
     }
 
-    try writer.print("// Auto-generated from {s}\n", .{source_path});
-    try writer.print("// DO NOT EDIT — regenerate with: winmd2zig {s} {s}\n", .{ source_path, interface_name });
     try writer.print("pub const {s} = extern struct {{\n", .{type_name});
     try writer.print("    // WinMD: {s}\n", .{full_name});
     const blob_hex = try formatGuidBlobHex(allocator, guid);
@@ -82,7 +145,7 @@ pub fn emitInterface(
     try writer.writeAll(" } };\n\n");
 
     try writer.writeAll("    lpVtbl: *const VTable,\n\n");
-    try writer.writeAll("    const VTable = extern struct {\n");
+    try writer.writeAll("    pub const VTable = extern struct {\n");
     try writer.writeAll("        // IUnknown (slots 0-2)\n");
     try writer.writeAll("        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,\n");
     try writer.writeAll("        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,\n");
@@ -119,10 +182,9 @@ pub fn emitInterface(
         try writer.print("        // {s} (slots 3-2)\n", .{type_name});
     }
     try writer.writeAll("    };\n\n");
-    try writer.print("    pub fn release(self: *{s}) void {{\n", .{type_name});
-    try writer.writeAll("        _ = self.lpVtbl.Release(@ptrCast(self));\n");
-    try writer.writeAll("    }\n");
-    try writer.writeAll("};\n");
+    try writer.print("    pub fn release(self: *{s}) void {{ comRelease(self); }}\n", .{type_name});
+    try writer.print("    pub fn queryInterface(self: *{s}, comptime T: type) WinRTError!*T {{ return comQueryInterface(self, T); }}\n", .{type_name});
+    try writer.writeAll("};\n\n");
 }
 
 fn findTypeDefRow(ctx: Context, interface_name: []const u8) !u32 {

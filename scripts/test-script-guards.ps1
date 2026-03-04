@@ -7,9 +7,11 @@ if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 
 $metaSync = Join-Path $RepoRoot "scripts\check-metadata-sync.ps1"
 $iidCheck = Join-Path $RepoRoot "scripts\check-tabview-delegate-iids.ps1"
+$caseMapCheck = Join-Path $RepoRoot "scripts\check-rust-case-map.ps1"
 
 if (-not (Test-Path -LiteralPath $metaSync)) { throw "Missing script: $metaSync" }
 if (-not (Test-Path -LiteralPath $iidCheck)) { throw "Missing script: $iidCheck" }
+if (-not (Test-Path -LiteralPath $caseMapCheck)) { throw "Missing script: $caseMapCheck" }
 
 # Guard 1: no stderr suppression in delegate IID check path.
 $iidText = Get-Content -LiteralPath $iidCheck -Raw
