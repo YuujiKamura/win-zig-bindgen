@@ -3,17 +3,23 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const metadata_module = makeMetadataModule(b, target, optimize);
+    const metadata_path_opt = b.option([]const u8, "win_zig_metadata_path", "Path to win-zig-metadata lib.zig");
+    const xaml_winmd_path_opt = b.option([]const u8, "xaml_winmd_path", "Path to Microsoft.UI.Xaml.winmd");
+    const skip_script_checks = b.option(bool, "skip_script_checks", "Skip pwsh-based script checks in gate") orelse false;
+    const script_shell = b.option([]const u8, "script_shell", "Shell for script checks (pwsh or powershell)") orelse "pwsh";
+    const metadata_module = makeMetadataModule(b, target, optimize, metadata_path_opt);
+
+    const main_module = b.createModule(.{
+        .root_source_file = b.path("main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    main_module.addImport("win_zig_metadata", metadata_module);
 
     const exe = b.addExecutable(.{
         .name = "win-zig-bindgen",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("main.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
+        .root_module = main_module,
     });
-    exe.root_module.addImport("win_zig_metadata", metadata_module);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -36,10 +42,17 @@ pub fn build(b: *std.Build) void {
     );
 
     const gen_cmd = b.addRunArtifact(exe);
-    const xaml_winmd = "C:\\Users\\yuuji\\.nuget\\packages\\microsoft.windowsappsdk\\1.4.230822000\\lib\\uap10.0\\Microsoft.UI.Xaml.winmd";
-    gen_cmd.addArgs(&.{ "-o" });
-    const audit_com_path = gen_cmd.addOutputFileArg("audit_com.zig");
-    gen_cmd.addArgs(&.{ xaml_winmd, "ITabView", "IUIElement", "ITextBox" });
+    const xaml_winmd = resolveXamlWinmdPath(b, xaml_winmd_path_opt);
+    const audit_com_path = if (xaml_winmd) |xaml| blk: {
+        gen_cmd.addArgs(&.{ "-o" });
+        const out = gen_cmd.addOutputFileArg("audit_com.zig");
+        gen_cmd.addArgs(&.{ xaml, "ITabView", "IUIElement", "ITextBox" });
+        break :blk out;
+    } else blk: {
+        const fail = b.addFail("Microsoft.UI.Xaml.winmd not found. Pass -Dxaml_winmd_path=<full-path>.");
+        audit_step.dependOn(&fail.step);
+        break :blk write_stubs.add("audit_com.zig", "pub const _audit_stub: u8 = 0;\n");
+    };
     
     const audit_test_bin = b.addTest(.{
         .name = "audit-compile",
@@ -52,30 +65,18 @@ pub fn build(b: *std.Build) void {
     audit_test_bin.root_module.addImport("winrt.zig", b.createModule(.{ .root_source_file = winrt_stub }));
     audit_test_bin.root_module.addImport("os.zig", b.createModule(.{ .root_source_file = os_stub }));
 
-    audit_step.dependOn(&gen_cmd.step);
+    if (xaml_winmd != null) audit_step.dependOn(&gen_cmd.step);
     audit_step.dependOn(&b.addRunArtifact(audit_test_bin).step);
 
     // Standard Tests
     const test_bin = b.addTest(.{
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("main.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
+        .root_module = main_module,
     });
-    test_bin.root_module.addImport("win_zig_metadata", metadata_module);
     const run_tests = b.addRunArtifact(test_bin);
     
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(audit_step);
-
-    const winmd2zig_main_module = b.createModule(.{
-        .root_source_file = b.path("main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    winmd2zig_main_module.addImport("win_zig_metadata", metadata_module);
 
     const red_test_bin = b.addTest(.{
         .name = "test-red",
@@ -85,7 +86,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    red_test_bin.root_module.addImport("winmd2zig_main", winmd2zig_main_module);
+    red_test_bin.root_module.addImport("winmd2zig_main", main_module);
     red_test_bin.root_module.addImport("win_zig_metadata", metadata_module);
     const run_red_tests = b.addRunArtifact(red_test_bin);
     const test_red_step = b.step("test-red", "Run RED parity tests");
@@ -107,29 +108,44 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&sync_map_cmd.step);
     gate_step.dependOn(test_step);
 
-    const script_checks = [_][]const u8{
-        "scripts/check-metadata-sync.ps1",
-        "scripts/check-tabview-delegate-iids.ps1",
-        "scripts/check-delegate-iid-vectors.ps1",
-        "scripts/check-rust-case-map.ps1",
-        "scripts/test-script-guards.ps1",
-    };
+    if (!skip_script_checks) {
+        const script_checks = [_][]const u8{
+            "scripts/check-metadata-sync.ps1",
+            "scripts/check-tabview-delegate-iids.ps1",
+            "scripts/check-delegate-iid-vectors.ps1",
+            "scripts/check-rust-case-map.ps1",
+            "scripts/test-script-guards.ps1",
+        };
 
-    for (script_checks) |script| {
-        const cmd = b.addSystemCommand(&.{
-            "pwsh",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            script,
-        });
-        cmd.step.dependOn(&sync_map_cmd.step);
-        gate_step.dependOn(&cmd.step);
+        for (script_checks) |script| {
+            const cmd = b.addSystemCommand(&.{
+                script_shell,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                script,
+            });
+            cmd.step.dependOn(&sync_map_cmd.step);
+            gate_step.dependOn(&cmd.step);
+        }
     }
 }
 
-fn makeMetadataModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+fn makeMetadataModule(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    override_path: ?[]const u8,
+) *std.Build.Module {
+    if (override_path) |p| {
+        return b.createModule(.{
+            .root_source_file = if (std.fs.path.isAbsolute(p)) .{ .cwd_relative = p } else b.path(p),
+            .target = target,
+            .optimize = optimize,
+        });
+    }
+
     const sibling_rel = "../win-zig-metadata/lib.zig";
     const sibling_abs = b.pathFromRoot(sibling_rel);
     if (std.fs.accessAbsolute(sibling_abs, .{})) |_| {
@@ -137,4 +153,94 @@ fn makeMetadataModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize:
     } else |_| {
         return b.createModule(.{ .root_source_file = b.path("metadata_local.zig"), .target = target, .optimize = optimize });
     }
+}
+
+fn resolveXamlWinmdPath(b: *std.Build, override_path: ?[]const u8) ?[]const u8 {
+    if (override_path) |p| {
+        if (std.fs.accessAbsolute(p, .{})) |_| return p else |_| {
+            std.log.warn("xaml_winmd_path does not exist: {s}", .{p});
+            return null;
+        }
+    }
+
+    const nuget_packages = std.process.getEnvVarOwned(b.allocator, "NUGET_PACKAGES") catch null;
+    const user_profile = std.process.getEnvVarOwned(b.allocator, "USERPROFILE") catch null;
+    const base = if (nuget_packages) |np|
+        std.fs.path.join(b.allocator, &.{ np, "microsoft.windowsappsdk" }) catch return null
+    else if (user_profile) |up|
+        std.fs.path.join(b.allocator, &.{ up, ".nuget", "packages", "microsoft.windowsappsdk" }) catch return null
+    else
+        return null;
+
+    if (std.fs.accessAbsolute(base, .{})) |_| {} else |_| {
+        std.log.warn("windowsappsdk package base not found: {s}", .{base});
+        return null;
+    }
+
+    var dir = std.fs.openDirAbsolute(base, .{ .iterate = true }) catch return null;
+    defer dir.close();
+
+    var versions = std.ArrayList([]const u8).empty;
+    defer {
+        for (versions.items) |v| b.allocator.free(v);
+        versions.deinit(b.allocator);
+    }
+
+    var it = dir.iterate();
+    while (it.next() catch null) |entry| {
+        if (entry.kind != .directory) continue;
+        const name = b.allocator.dupe(u8, entry.name) catch continue;
+        versions.append(b.allocator, name) catch continue;
+    }
+    if (versions.items.len == 0) return null;
+
+    std.mem.sort([]const u8, versions.items, {}, struct {
+        fn lessThan(_: void, a: []const u8, b2: []const u8) bool {
+            return compareVersionDesc(a, b2);
+        }
+    }.lessThan);
+
+    for (versions.items) |v| {
+        const p = std.fs.path.join(b.allocator, &.{ base, v, "lib", "uap10.0", "Microsoft.UI.Xaml.winmd" }) catch continue;
+        if (std.fs.accessAbsolute(p, .{})) |_| return p else |_| {}
+    }
+
+    return null;
+}
+
+fn compareVersionDesc(a: []const u8, b: []const u8) bool {
+    const va = parseVersion(a);
+    const vb = parseVersion(b);
+    if (va.valid and vb.valid) {
+        var i: usize = 0;
+        while (i < va.count or i < vb.count) : (i += 1) {
+            const av: u64 = if (i < va.count) va.parts[i] else 0;
+            const bv: u64 = if (i < vb.count) vb.parts[i] else 0;
+            if (av == bv) continue;
+            return av > bv;
+        }
+        return false;
+    }
+    if (va.valid != vb.valid) return va.valid;
+    return std.mem.order(u8, a, b) == .gt;
+}
+
+const ParsedVersion = struct {
+    valid: bool,
+    parts: [8]u64 = .{0} ** 8,
+    count: usize = 0,
+};
+
+fn parseVersion(v: []const u8) ParsedVersion {
+    var out: ParsedVersion = .{ .valid = true };
+    var it = std.mem.splitScalar(u8, v, '.');
+    while (it.next()) |seg| {
+        if (seg.len == 0 or out.count >= out.parts.len) return .{ .valid = false };
+        for (seg) |ch| {
+            if (ch < '0' or ch > '9') return .{ .valid = false };
+        }
+        out.parts[out.count] = std.fmt.parseInt(u64, seg, 10) catch return .{ .valid = false };
+        out.count += 1;
+    }
+    return out;
 }

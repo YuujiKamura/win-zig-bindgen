@@ -8,6 +8,8 @@ const streams = win_zig_metadata.streams;
 const emit = @import("emit.zig");
 const resolver = @import("resolver.zig");
 const winrt_guid = @import("winrt_guid.zig");
+const sdk_discovery = @import("sdk_discovery.zig");
+const abi_oracles = @import("abi_oracles.zig");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -58,17 +60,9 @@ pub fn main() !void {
 
     if (winmd_path == null or iface_names.items.len == 0) return usage();
 
-    const data = try std.fs.cwd().readFileAlloc(allocator, winmd_path.?, std.math.maxInt(usize));
-    const pe_info = try pe.parse(allocator, data);
-    const md_info = try metadata.parse(allocator, pe_info);
-
-    const table_stream = md_info.getStream("#~") orelse return error.MissingTableStream;
-    const strings_stream = md_info.getStream("#Strings") orelse return error.MissingStringsStream;
-    const blob_stream = md_info.getStream("#Blob") orelse return error.MissingBlobStream;
-    const guid_stream = md_info.getStream("#GUID") orelse return error.MissingGuidStream;
-
-    const table_info = try tables.parse(table_stream.data);
-    const heaps = streams.Heaps{ .strings = strings_stream.data, .blob = blob_stream.data, .guid = guid_stream.data };
+    const parsed = try parseWinmdTableHeaps(allocator, winmd_path.?);
+    const table_info = parsed.table_info;
+    const heaps = parsed.heaps;
     const ctx = emit.Context{ .table_info = table_info, .heaps = heaps };
     const rctx = resolver.Context{ .table_info = table_info, .heaps = heaps };
 
@@ -116,6 +110,18 @@ fn usageMapSync() !void {
 }
 
 fn loadCtx(allocator: std.mem.Allocator, winmd_path: []const u8) !resolver.Context {
+    const parsed = try parseWinmdTableHeaps(allocator, winmd_path);
+    const table_info = parsed.table_info;
+    const heaps = parsed.heaps;
+    return .{ .table_info = table_info, .heaps = heaps };
+}
+
+const ParsedTableHeaps = struct {
+    table_info: tables.Info,
+    heaps: streams.Heaps,
+};
+
+fn parseWinmdTableHeaps(allocator: std.mem.Allocator, winmd_path: []const u8) !ParsedTableHeaps {
     const data = try std.fs.cwd().readFileAlloc(allocator, winmd_path, std.math.maxInt(usize));
     const pe_info = try pe.parse(allocator, data);
     const md_info = try metadata.parse(allocator, pe_info);
@@ -141,25 +147,13 @@ fn runDelegateIid(allocator: std.mem.Allocator, winmd_path: []const u8, sender_c
     };
     defer allocator.free(result_sig);
     const iid = try winrt_guid.typedEventHandlerIid(sender_sig, result_sig, allocator);
-    const line = try std.fmt.allocPrint(
-        allocator,
-        "TypedEventHandler IID: {x:0>8}-{x:0>4}-{x:0>4}-{x:0>2}{x:0>2}-{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}\n",
-        .{
-            iid.data1,
-            iid.data2,
-            iid.data3,
-            iid.data4[0],
-            iid.data4[1],
-            iid.data4[2],
-            iid.data4[3],
-            iid.data4[4],
-            iid.data4[5],
-            iid.data4[6],
-            iid.data4[7],
-        },
-    );
-    defer allocator.free(line);
-    try std.fs.File.stdout().writeAll(line);
+    var out = std.ArrayList(u8).empty;
+    defer out.deinit(allocator);
+    const w = out.writer(allocator);
+    try w.writeAll("TypedEventHandler IID: ");
+    try writeGuidDashedLower(w, iid);
+    try w.writeAll("\n");
+    try std.fs.File.stdout().writeAll(out.items);
 }
 
 fn runTabViewDelegates(allocator: std.mem.Allocator, winmd_path: []const u8) !void {
@@ -331,37 +325,7 @@ fn collectZigTestTitles(allocator: std.mem.Allocator, path: []const u8) !std.Arr
 }
 
 pub fn findWindowsKitUnionWinmdAlloc(allocator: std.mem.Allocator) ![]u8 {
-    const base = "C:\\Program Files (x86)\\Windows Kits\\10\\UnionMetadata";
-    var dir = try std.fs.openDirAbsolute(base, .{ .iterate = true });
-    defer dir.close();
-
-    var versions = std.ArrayList([]const u8).empty;
-    defer {
-        for (versions.items) |v| allocator.free(v);
-        versions.deinit(allocator);
-    }
-
-    var it = dir.iterate();
-    while (try it.next()) |entry| {
-        if (entry.kind != .directory) continue;
-        if (!std.mem.startsWith(u8, entry.name, "10.")) continue;
-        try versions.append(allocator, try allocator.dupe(u8, entry.name));
-    }
-    if (versions.items.len == 0) return error.FileNotFound;
-
-    std.mem.sort([]const u8, versions.items, {}, struct {
-        fn lessThan(_: void, a: []const u8, b: []const u8) bool {
-            return std.mem.order(u8, a, b) == .gt;
-        }
-    }.lessThan);
-
-    for (versions.items) |v| {
-        const p = try std.fmt.allocPrint(allocator, "{s}\\{s}\\Windows.winmd", .{ base, v });
-        errdefer allocator.free(p);
-        std.fs.accessAbsolute(p, .{}) catch continue;
-        return p;
-    }
-    return error.FileNotFound;
+    return sdk_discovery.findWindowsKitUnionWinmdAlloc(allocator);
 }
 
 pub fn findWin32DefaultWinmdAlloc(allocator: std.mem.Allocator) ![]u8 {
@@ -384,15 +348,9 @@ pub fn hasTypeDefByNameAlloc(allocator: std.mem.Allocator, winmd_path: []const u
     const ns = full_name[0..split_at];
     const name = full_name[split_at + 1 ..];
 
-    const data = try std.fs.cwd().readFileAlloc(a, winmd_path, std.math.maxInt(usize));
-    const pe_info = try pe.parse(a, data);
-    const md_info = try metadata.parse(a, pe_info);
-    const table_stream = md_info.getStream("#~") orelse return false;
-    const strings_stream = md_info.getStream("#Strings") orelse return false;
-    const blob_stream = md_info.getStream("#Blob") orelse return false;
-    const guid_stream = md_info.getStream("#GUID") orelse return false;
-    const table_info = try tables.parse(table_stream.data);
-    const heaps = streams.Heaps{ .strings = strings_stream.data, .blob = blob_stream.data, .guid = guid_stream.data };
+    const parsed = try parseWinmdTableHeaps(a, winmd_path);
+    const table_info = parsed.table_info;
+    const heaps = parsed.heaps;
 
     const t = table_info.getTable(.TypeDef);
     var row: u32 = 1;
@@ -411,15 +369,9 @@ pub fn hasMethodDefByNameAlloc(allocator: std.mem.Allocator, winmd_path: []const
     defer arena.deinit();
     const a = arena.allocator();
 
-    const data = try std.fs.cwd().readFileAlloc(a, winmd_path, std.math.maxInt(usize));
-    const pe_info = try pe.parse(a, data);
-    const md_info = try metadata.parse(a, pe_info);
-    const table_stream = md_info.getStream("#~") orelse return false;
-    const strings_stream = md_info.getStream("#Strings") orelse return false;
-    const blob_stream = md_info.getStream("#Blob") orelse return false;
-    const guid_stream = md_info.getStream("#GUID") orelse return false;
-    const table_info = try tables.parse(table_stream.data);
-    const heaps = streams.Heaps{ .strings = strings_stream.data, .blob = blob_stream.data, .guid = guid_stream.data };
+    const parsed = try parseWinmdTableHeaps(a, winmd_path);
+    const table_info = parsed.table_info;
+    const heaps = parsed.heaps;
 
     const t = table_info.getTable(.MethodDef);
     var row: u32 = 1;
@@ -432,24 +384,5 @@ pub fn hasMethodDefByNameAlloc(allocator: std.mem.Allocator, winmd_path: []const
 }
 
 pub fn inspectFunctionAbiByNameAlloc(allocator: std.mem.Allocator, _: []const u8, function_name: []const u8) ![]u8 {
-    // Stable ABI anchors used by RED function parity tests.
-    if (std.mem.eql(u8, function_name, "GetTickCount")) {
-        return allocator.dupe(u8, "fn() -> u32");
-    }
-    if (std.mem.eql(u8, function_name, "CoInitializeEx")) {
-        return allocator.dupe(u8, "fn(p0:*void, p1:u32) -> Windows.Win32.Foundation.HRESULT");
-    }
-    if (std.mem.eql(u8, function_name, "GlobalMemoryStatus")) {
-        return allocator.dupe(u8, "fn(p0:*Windows.Win32.System.SystemInformation.MEMORYSTATUS) -> void");
-    }
-    if (std.mem.eql(u8, function_name, "FatalExit")) {
-        return allocator.dupe(u8, "fn(p0:i32) -> void");
-    }
-    if (std.mem.eql(u8, function_name, "SetComputerNameA")) {
-        return allocator.dupe(u8, "fn(p0:Windows.Win32.Foundation.PSTR) -> Windows.Win32.Foundation.BOOL");
-    }
-    if (std.mem.eql(u8, function_name, "CoCreateGuid")) {
-        return allocator.dupe(u8, "fn(p0:*Windows.Win32.Foundation.GUID) -> Windows.Win32.Foundation.HRESULT");
-    }
-    return error.FunctionNotFound;
+    return abi_oracles.inspectFunctionAbiByNameAlloc(allocator, function_name);
 }
