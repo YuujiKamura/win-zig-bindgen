@@ -104,13 +104,13 @@ pub fn writePrologue(writer: anytype) !void {
         \\        GetAt: *const fn (*anyopaque, u32, *?*anyopaque) callconv(.winapi) HRESULT,
         \\        get_Size: *const fn (*anyopaque, *u32) callconv(.winapi) HRESULT,
         \\        GetView: VtblPlaceholder,
-        \\        IndexOf: VtblPlaceholder,
+        \\        IndexOf: *const fn (*anyopaque, ?*anyopaque, *u32, *i32) callconv(.winapi) HRESULT,
         \\        SetAt: VtblPlaceholder,
         \\        InsertAt: *const fn (*anyopaque, u32, ?*anyopaque) callconv(.winapi) HRESULT,
         \\        RemoveAt: *const fn (*anyopaque, u32) callconv(.winapi) HRESULT,
         \\        Append: *const fn (*anyopaque, ?*anyopaque) callconv(.winapi) HRESULT,
         \\        RemoveAtEnd: VtblPlaceholder,
-        \\        Clear: VtblPlaceholder,
+        \\        Clear: *const fn (*anyopaque) callconv(.winapi) HRESULT,
         \\        GetMany: VtblPlaceholder,
         \\        ReplaceAll: VtblPlaceholder,
         \\    };
@@ -121,6 +121,18 @@ pub fn writePrologue(writer: anytype) !void {
         \\    pub fn insertAt(self: *@This(), i: u32, item: ?*anyopaque) !void { try hrCheck(self.lpVtbl.InsertAt(self, i, item)); }
         \\    pub fn append(self: *@This(), item: ?*anyopaque) !void { try hrCheck(self.lpVtbl.Append(self, item)); }
         \\    pub fn removeAt(self: *@This(), i: u32) !void { try hrCheck(self.lpVtbl.RemoveAt(self, i)); }
+        \\    pub fn clear(self: *@This()) !void { try hrCheck(self.lpVtbl.Clear(self)); }
+        \\    pub fn indexOf(self: *@This(), item: ?*anyopaque) !?u32 { var idx: u32 = 0; var found: i32 = 0; try hrCheck(self.lpVtbl.IndexOf(self, item, &idx, &found)); if (found != 0) return idx; return null; }
+        \\};
+        \\
+        \\pub const GridUnitType = struct {
+        \\    pub const Pixel: i32 = 0;
+        \\    pub const Auto: i32 = 1;
+        \\    pub const Star: i32 = 2;
+        \\};
+        \\pub const GridLength = extern struct {
+        \\    Value: f64,
+        \\    GridUnitType: i32,
         \\};
         \\
         \\pub const IPropertyValue = extern struct {
@@ -544,7 +556,7 @@ pub fn emitInterface(
             raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
         }
 
-        if (std.mem.eql(u8, type_name, "IFrameworkElement") and std.mem.eql(u8, name, "add_Loaded")) {
+        if (std.mem.eql(u8, type_name, "IFrameworkElement") and (std.mem.eql(u8, name, "add_Loaded") or std.mem.eql(u8, name, "add_SizeChanged"))) {
             allocator.free(vtbl_sig);
             allocator.free(wrapper_sig);
             allocator.free(wrapper_call);
@@ -643,6 +655,88 @@ pub fn emitInterface(
             wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}(self, p0));", .{unique});
             raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: Color) !void", .{unique});
             raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
+        }
+
+        if (std.mem.eql(u8, type_name, "IPanel") and std.mem.eql(u8, name, "get_Children")) {
+            allocator.free(vtbl_sig);
+            allocator.free(wrapper_sig);
+            allocator.free(wrapper_call);
+            allocator.free(raw_wrapper_sig);
+            allocator.free(raw_wrapper_call);
+
+            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
+            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IVector", .{norm_name});
+            wrapper_call = try std.fmt.allocPrint(
+                allocator,
+                "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); return @ptrCast(@alignCast(out.?));",
+                .{unique},
+            );
+            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IVector", .{unique});
+            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
+        }
+
+        if (std.mem.eql(u8, type_name, "IGrid") and std.mem.eql(u8, name, "get_RowDefinitions")) {
+            allocator.free(vtbl_sig);
+            allocator.free(wrapper_sig);
+            allocator.free(wrapper_call);
+            allocator.free(raw_wrapper_sig);
+            allocator.free(raw_wrapper_call);
+
+            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
+            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IVector", .{norm_name});
+            wrapper_call = try std.fmt.allocPrint(
+                allocator,
+                "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); return @ptrCast(@alignCast(out.?));",
+                .{unique},
+            );
+            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IVector", .{unique});
+            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
+        }
+
+        if (std.mem.eql(u8, type_name, "IGridStatics") and (std.mem.eql(u8, name, "SetRow") or std.mem.eql(u8, name, "SetColumn"))) {
+            allocator.free(vtbl_sig);
+            allocator.free(wrapper_sig);
+            allocator.free(wrapper_call);
+            allocator.free(raw_wrapper_sig);
+            allocator.free(raw_wrapper_call);
+
+            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, ?*anyopaque, i32) callconv(.winapi) HRESULT");
+            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque, p1: i32) !void", .{norm_name});
+            wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}(self, p0, p1));", .{unique});
+            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque, p1: i32) !void", .{unique});
+            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0, p1);", .{norm_name});
+        }
+
+        if (std.mem.eql(u8, type_name, "IRowDefinition") and std.mem.eql(u8, name, "put_Height")) {
+            allocator.free(vtbl_sig);
+            allocator.free(wrapper_sig);
+            allocator.free(wrapper_call);
+            allocator.free(raw_wrapper_sig);
+            allocator.free(raw_wrapper_call);
+
+            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, GridLength) callconv(.winapi) HRESULT");
+            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: GridLength) !void", .{norm_name});
+            wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}(self, p0));", .{unique});
+            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: GridLength) !void", .{unique});
+            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
+        }
+
+        if (std.mem.eql(u8, type_name, "IRowDefinition") and std.mem.eql(u8, name, "get_Height")) {
+            allocator.free(vtbl_sig);
+            allocator.free(wrapper_sig);
+            allocator.free(wrapper_call);
+            allocator.free(raw_wrapper_sig);
+            allocator.free(raw_wrapper_call);
+
+            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *GridLength) callconv(.winapi) HRESULT");
+            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !GridLength", .{norm_name});
+            wrapper_call = try std.fmt.allocPrint(
+                allocator,
+                "var out: GridLength = .{{ .Value = 0, .GridUnitType = 0 }}; try hrCheck(self.lpVtbl.{s}(self, &out)); return out;",
+                .{unique},
+            );
+            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !GridLength", .{unique});
+            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
         }
 
         try methods.append(allocator, .{ .raw_name = try allocator.dupe(u8, unique), .norm_name = norm_name, .vtbl_sig = vtbl_sig, .wrapper_sig = wrapper_sig, .wrapper_call = wrapper_call, .raw_wrapper_sig = raw_wrapper_sig, .raw_wrapper_call = raw_wrapper_call });
