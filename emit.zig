@@ -90,138 +90,6 @@ pub fn writePrologue(writer: anytype) !void {
         \\    pub fn queryInterface(self: *@This(), comptime T: type) !*T { return comQueryInterface(self, T); }
         \\};
         \\
-        \\pub const IVector = extern struct {
-        \\    // Windows.Foundation.Collections.IVector<IInspectable>
-        \\    pub const IID = GUID{ .Data1 = 0xb32bdca4, .Data2 = 0x5e52, .Data3 = 0x5b27, .Data4 = .{ 0xbc, 0x5d, 0xd6, 0x6a, 0x1a, 0x26, 0x8c, 0x2a } };
-        \\    lpVtbl: *const VTable,
-        \\    pub const VTable = extern struct {
-        \\        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,
-        \\        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,
-        \\        Release: *const fn (*anyopaque) callconv(.winapi) u32,
-        \\        GetIids: VtblPlaceholder,
-        \\        GetRuntimeClassName: VtblPlaceholder,
-        \\        GetTrustLevel: VtblPlaceholder,
-        \\        GetAt: *const fn (*anyopaque, u32, *?*anyopaque) callconv(.winapi) HRESULT,
-        \\        get_Size: *const fn (*anyopaque, *u32) callconv(.winapi) HRESULT,
-        \\        GetView: VtblPlaceholder,
-        \\        IndexOf: *const fn (*anyopaque, ?*anyopaque, *u32, *i32) callconv(.winapi) HRESULT,
-        \\        SetAt: VtblPlaceholder,
-        \\        InsertAt: *const fn (*anyopaque, u32, ?*anyopaque) callconv(.winapi) HRESULT,
-        \\        RemoveAt: *const fn (*anyopaque, u32) callconv(.winapi) HRESULT,
-        \\        Append: *const fn (*anyopaque, ?*anyopaque) callconv(.winapi) HRESULT,
-        \\        RemoveAtEnd: VtblPlaceholder,
-        \\        Clear: *const fn (*anyopaque) callconv(.winapi) HRESULT,
-        \\        GetMany: VtblPlaceholder,
-        \\        ReplaceAll: VtblPlaceholder,
-        \\    };
-        \\    pub fn release(self: *@This()) void { comRelease(self); }
-        \\    pub fn queryInterface(self: *@This(), comptime T: type) !*T { return comQueryInterface(self, T); }
-        \\    pub fn getSize(self: *@This()) !u32 { var out: u32 = 0; try hrCheck(self.lpVtbl.get_Size(self, &out)); return out; }
-        \\    pub fn getAt(self: *@This(), i: u32) !*anyopaque { var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.GetAt(self, i, &out)); return out orelse error.WinRTFailed; }
-        \\    pub fn insertAt(self: *@This(), i: u32, item: ?*anyopaque) !void { try hrCheck(self.lpVtbl.InsertAt(self, i, item)); }
-        \\    pub fn append(self: *@This(), item: ?*anyopaque) !void { try hrCheck(self.lpVtbl.Append(self, item)); }
-        \\    pub fn removeAt(self: *@This(), i: u32) !void { try hrCheck(self.lpVtbl.RemoveAt(self, i)); }
-        \\    pub fn clear(self: *@This()) !void { try hrCheck(self.lpVtbl.Clear(self)); }
-        \\    pub fn indexOf(self: *@This(), item: ?*anyopaque) !?u32 { var idx: u32 = 0; var found: i32 = 0; try hrCheck(self.lpVtbl.IndexOf(self, item, &idx, &found)); if (found != 0) return idx; return null; }
-        \\};
-        \\
-        \\pub const GridUnitType = struct {
-        \\    pub const Pixel: i32 = 0;
-        \\    pub const Auto: i32 = 1;
-        \\    pub const Star: i32 = 2;
-        \\};
-        \\pub const GridLength = extern struct {
-        \\    Value: f64,
-        \\    GridUnitType: i32,
-        \\};
-        \\
-        \\pub const IPropertyValue = extern struct {
-        \\    pub const IID = GUID{ .Data1 = 0x4bd682dd, .Data2 = 0x7554, .Data3 = 0x40e9, .Data4 = .{ 0x9a, 0x9b, 0x82, 0x65, 0x4e, 0xde, 0x7e, 0x62 } };
-        \\    lpVtbl: *const VTable,
-        \\    pub const VTable = extern struct {
-        \\        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,
-        \\        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,
-        \\        Release: *const fn (*anyopaque) callconv(.winapi) u32,
-        \\        GetIids: VtblPlaceholder,
-        \\        GetRuntimeClassName: VtblPlaceholder,
-        \\        GetTrustLevel: VtblPlaceholder,
-        \\        get_Type: VtblPlaceholder,
-        \\        get_IsNumericScalar: VtblPlaceholder,
-        \\        GetUInt8: VtblPlaceholder,
-        \\        GetInt16: VtblPlaceholder,
-        \\        GetUInt16: VtblPlaceholder,
-        \\        GetInt32: VtblPlaceholder,
-        \\        GetUInt32: VtblPlaceholder,
-        \\        GetInt64: VtblPlaceholder,
-        \\        GetUInt64: VtblPlaceholder,
-        \\        GetSingle: VtblPlaceholder,
-        \\        GetDouble: VtblPlaceholder,
-        \\        GetChar16: VtblPlaceholder,
-        \\        GetBoolean: VtblPlaceholder,
-        \\        GetString: *const fn (*anyopaque, *HSTRING) callconv(.winapi) HRESULT,
-        \\    };
-        \\    pub fn release(self: *@This()) void { comRelease(self); }
-        \\    pub fn queryInterface(self: *@This(), comptime T: type) !*T { return comQueryInterface(self, T); }
-        \\    pub fn getString(self: *@This()) !HSTRING { var out: HSTRING = null; try hrCheck(self.lpVtbl.GetString(self, &out)); return out; }
-        \\};
-        \\
-        \\pub const IPropertyValueStatics = extern struct {
-        \\    pub const IID = GUID{ .Data1 = 0x629bdbc8, .Data2 = 0xd932, .Data3 = 0x4ff4, .Data4 = .{ 0x96, 0xb9, 0x8d, 0x96, 0xc5, 0xc1, 0xe8, 0x58 } };
-        \\    lpVtbl: *const VTable,
-        \\    pub const VTable = extern struct {
-        \\        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,
-        \\        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,
-        \\        Release: *const fn (*anyopaque) callconv(.winapi) u32,
-        \\        GetIids: VtblPlaceholder,
-        \\        GetRuntimeClassName: VtblPlaceholder,
-        \\        GetTrustLevel: VtblPlaceholder,
-        \\        CreateEmpty: VtblPlaceholder,
-        \\        CreateUInt8: VtblPlaceholder,
-        \\        CreateInt16: VtblPlaceholder,
-        \\        CreateUInt16: VtblPlaceholder,
-        \\        CreateInt32: VtblPlaceholder,
-        \\        CreateUInt32: VtblPlaceholder,
-        \\        CreateInt64: VtblPlaceholder,
-        \\        CreateUInt64: VtblPlaceholder,
-        \\        CreateSingle: VtblPlaceholder,
-        \\        CreateDouble: VtblPlaceholder,
-        \\        CreateChar16: VtblPlaceholder,
-        \\        CreateBoolean: VtblPlaceholder,
-        \\        CreateString: *const fn (*anyopaque, HSTRING, *?*anyopaque) callconv(.winapi) HRESULT,
-        \\    };
-        \\    pub fn release(self: *@This()) void { comRelease(self); }
-        \\    pub fn queryInterface(self: *@This(), comptime T: type) !*T { return comQueryInterface(self, T); }
-        \\    pub fn createString(self: *@This(), s: HSTRING) !*IInspectable { var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.CreateString(self, s, &out)); return @ptrCast(@alignCast(out.?)); }
-        \\};
-        \\
-        \\pub const ISwapChainPanelNative = extern struct {
-        \\    pub const IID = GUID{ .Data1 = 0x63aad0b8, .Data2 = 0x7c24, .Data3 = 0x40ff, .Data4 = .{ 0x85, 0xa8, 0x64, 0x0d, 0x94, 0x4c, 0xc3, 0x25 } };
-        \\    lpVtbl: *const VTable,
-        \\    pub const VTable = extern struct {
-        \\        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,
-        \\        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,
-        \\        Release: *const fn (*anyopaque) callconv(.winapi) u32,
-        \\        SetSwapChain: *const fn (*anyopaque, ?*anyopaque) callconv(.winapi) HRESULT,
-        \\    };
-        \\    pub fn release(self: *ISwapChainPanelNative) void { comRelease(self); }
-        \\    pub fn queryInterface(self: *ISwapChainPanelNative, comptime T: type) !*T { return comQueryInterface(self, T); }
-        \\    pub fn setSwapChain(self: *@This(), sc: ?*anyopaque) !void { try hrCheck(self.lpVtbl.SetSwapChain(self, sc)); }
-        \\};
-        \\
-        \\pub const IWindowNative = extern struct {
-        \\    pub const IID = GUID{ .Data1 = 0xeecdbf0e, .Data2 = 0xbae9, .Data3 = 0x4cb6, .Data4 = .{ 0xa6, 0x8e, 0x95, 0x98, 0xe1, 0xcb, 0x57, 0xbb } };
-        \\    lpVtbl: *const VTable,
-        \\    pub const VTable = extern struct {
-        \\        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,
-        \\        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,
-        \\        Release: *const fn (*anyopaque) callconv(.winapi) u32,
-        \\        getWindowHandle: *const fn (*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT,
-        \\    };
-        \\    pub fn release(self: *@This()) void { comRelease(self); }
-        \\    pub fn queryInterface(self: *@This(), comptime T: type) !*T { return comQueryInterface(self, T); }
-        \\    pub fn getWindowHandle(self: *@This()) !*anyopaque { var h: ?*anyopaque = null; try hrCheck(self.lpVtbl.getWindowHandle(self, &h)); return h orelse error.WinRTFailed; }
-        \\};
-        \\
         \\
     );
 }
@@ -272,7 +140,9 @@ pub fn emitInterface(
         var sig_c = SigCursor{ .data = sig_blob };
         _ = sig_c.readByte(); 
         const param_count = sig_c.readCompressedUInt() orelse 0;
-        _ = try decodeSigType(allocator, ctx, &sig_c, true);
+        const ret_type_raw = try decodeSigType(allocator, ctx, &sig_c, true) orelse "void";
+        defer if (!isBuiltinType(ret_type_raw) and !std.mem.eql(u8, ret_type_raw, "void") and !std.mem.eql(u8, ret_type_raw, "SZARRAY")) allocator.free(ret_type_raw);
+
 
         var vtbl_params = std.ArrayList(u8).empty;
         defer vtbl_params.deinit(allocator);
@@ -281,6 +151,9 @@ pub fn emitInterface(
         var wrapper_params = std.ArrayList(u8).empty;
         defer wrapper_params.deinit(allocator);
 
+        var wrapper_fwd_args = std.ArrayList(u8).empty;
+        defer wrapper_fwd_args.deinit(allocator);
+
         var call_args = std.ArrayList(u8).empty;
         defer call_args.deinit(allocator);
         try call_args.appendSlice(allocator, "self");
@@ -288,42 +161,68 @@ pub fn emitInterface(
         var wrapper_ret: []const u8 = try allocator.dupe(u8, "void");
         defer allocator.free(wrapper_ret);
 
-        const is_getter = std.mem.startsWith(u8, name, "get_") and param_count == 1;
+        // WinRT getter: param_count==1 means ABI has out-param; param_count==0 means
+        // the .winmd uses managed convention (return type IS the property type).
+        const is_getter = std.mem.startsWith(u8, name, "get_") and (param_count == 1 or
+            (param_count == 0 and !std.mem.eql(u8, ret_type_raw, "void")));
+
+        var byref_indices = std.ArrayList(u32).empty;
+        defer byref_indices.deinit(allocator);
+
+        var param_vtbl_types = std.ArrayList([]const u8).empty;
+        defer {
+            for (param_vtbl_types.items) |t| allocator.free(t);
+            param_vtbl_types.deinit(allocator);
+        }
+
+        var param_logical_types = std.ArrayList([]const u8).empty;
+        defer {
+            for (param_logical_types.items) |t| allocator.free(t);
+            param_logical_types.deinit(allocator);
+        }
 
         var p_idx: u32 = 0;
         while (p_idx < param_count) : (p_idx += 1) {
+            const is_byref = (sig_c.pos < sig_c.data.len and sig_c.data[sig_c.pos] == 0x10);
             const p_type_raw = try decodeSigType(allocator, ctx, &sig_c, true) orelse "?*anyopaque";
+            if (is_byref) try byref_indices.append(allocator, p_idx);
             defer if (!isBuiltinType(p_type_raw)) allocator.free(p_type_raw);
 
             var p_type_vtbl = if (std.mem.eql(u8, p_type_raw, "anyopaque"))
                 try allocator.dupe(u8, "?*anyopaque")
-            else if (isBuiltinType(p_type_raw) or std.mem.startsWith(u8, p_type_raw, "*") or std.mem.startsWith(u8, p_type_raw, "?"))
+            else if (isBuiltinType(p_type_raw))
                 try allocator.dupe(u8, p_type_raw)
+            else if (std.mem.startsWith(u8, p_type_raw, "*")) blk_vtbl: {
+                const inner = p_type_raw[1..];
+                if (isBuiltinType(inner) or std.mem.eql(u8, inner, "EventRegistrationToken") or isKnownStruct(inner))
+                    break :blk_vtbl try allocator.dupe(u8, p_type_raw) // *i32, *EventRegistrationToken, *GridLength
+                else
+                    break :blk_vtbl try allocator.dupe(u8, "*?*anyopaque"); // *IVector -> *?*anyopaque
+            } else if (std.mem.startsWith(u8, p_type_raw, "?"))
+                try allocator.dupe(u8, p_type_raw)
+            else if (isKnownStruct(p_type_raw) or std.mem.eql(u8, p_type_raw, "EventRegistrationToken"))
+                try allocator.dupe(u8, p_type_raw) // Color, GridLength, EventRegistrationToken pass by value
             else
-                // Unknown/complex projected types must remain pointer-like at ABI edge.
-                try allocator.dupe(u8, "?*anyopaque");
+                try allocator.dupe(u8, "?*anyopaque"); // interface names -> ?*anyopaque
             
-            // CONCESSION: Ghostty expects pointers for many things it passes as i32/usize
-            if (std.mem.eql(u8, name, "Start") or std.mem.eql(u8, name, "CreateInstance") or std.mem.eql(u8, name, "put_Content") or std.mem.eql(u8, name, "put_Title")) {
-                if (p_idx == 0) { // First arg usually the object or string
-                    allocator.free(p_type_vtbl);
-                    p_type_vtbl = try allocator.dupe(u8, "?*anyopaque");
-                }
-            }
-            if (std.mem.containsAtLeast(u8, name, 1, "add_") or std.mem.containsAtLeast(u8, name, 1, "remove_")) {
-                if (std.mem.eql(u8, p_type_vtbl, "i32")) {
-                    allocator.free(p_type_vtbl);
-                    p_type_vtbl = try allocator.dupe(u8, "i64");
-                }
-            }
+            // No concessions needed - proper type resolution handles ABI mapping
             defer allocator.free(p_type_vtbl);
 
             try vtbl_params.appendSlice(allocator, ", ");
             try vtbl_params.appendSlice(allocator, p_type_vtbl);
+            try param_vtbl_types.append(allocator, try allocator.dupe(u8, p_type_vtbl));
+            try param_logical_types.append(allocator, try allocator.dupe(u8, p_type_raw));
 
             if (is_getter) {
+                // Use logical type from decoded signature for return type
+                const logical_raw = p_type_raw; // e.g., "*IVector", "*i32", "*GridLength"
+                const logical_inner = if (std.mem.startsWith(u8, logical_raw, "*")) logical_raw[1..] else logical_raw;
+                const is_iface_return = isInterfaceType(logical_inner);
+
                 allocator.free(wrapper_ret);
-                if (std.mem.startsWith(u8, p_type_vtbl, "*")) {
+                if (is_iface_return) {
+                    wrapper_ret = try std.fmt.allocPrint(allocator, "*{s}", .{logical_inner});
+                } else if (std.mem.startsWith(u8, p_type_vtbl, "*")) {
                     wrapper_ret = try allocator.dupe(u8, p_type_vtbl[1..]);
                 } else {
                     wrapper_ret = try allocator.dupe(u8, p_type_vtbl);
@@ -335,20 +234,82 @@ pub fn emitInterface(
                 try wrapper_params.appendSlice(allocator, p_name);
                 try wrapper_params.appendSlice(allocator, ": ");
                 
-                // CONCESSION: In wrappers, accept anything for pointers to match Ghostty's lax casting
-                if (std.mem.startsWith(u8, p_type_vtbl, "?*") or std.mem.eql(u8, p_type_vtbl, "HSTRING")) {
+                // Wrappers accept anytype for non-null pointers (lax casting),
+                // but use concrete type for nullable pointers (callers may pass null).
+                if (std.mem.eql(u8, p_type_vtbl, "HSTRING")) {
                     try wrapper_params.appendSlice(allocator, "anytype");
+                } else if (std.mem.startsWith(u8, p_type_vtbl, "?*")) {
+                    try wrapper_params.appendSlice(allocator, p_type_vtbl);
                 } else {
                     try wrapper_params.appendSlice(allocator, p_type_vtbl);
                 }
 
+                try wrapper_fwd_args.appendSlice(allocator, ", ");
+                try wrapper_fwd_args.appendSlice(allocator, p_name);
+
                 try call_args.appendSlice(allocator, ", ");
-                if (std.mem.startsWith(u8, p_type_vtbl, "?*") or std.mem.eql(u8, p_type_vtbl, "HSTRING")) {
+                if (std.mem.eql(u8, p_type_vtbl, "HSTRING")) {
                     try call_args.appendSlice(allocator, "@ptrCast(");
                     try call_args.appendSlice(allocator, p_name);
                     try call_args.appendSlice(allocator, ")");
                 } else {
                     try call_args.appendSlice(allocator, p_name);
+                }
+            }
+        }
+
+        // WinRT managed convention: non-void return type in .winmd → synthesize ABI out-param
+        // Applies to getters (get_*), event subscriptions (add_*), and methods with non-void returns
+        if (std.mem.eql(u8, ret_type_raw, "SZARRAY")) {
+            // WinRT array return: becomes [out] uint32 count, [out] T* definitions at ABI
+            const synth_base: u32 = @intCast(param_vtbl_types.items.len);
+            try vtbl_params.appendSlice(allocator, ", *u32");
+            try param_vtbl_types.append(allocator, try allocator.dupe(u8, "*u32"));
+            try param_logical_types.append(allocator, try allocator.dupe(u8, "*u32"));
+            try byref_indices.append(allocator, synth_base);
+            try vtbl_params.appendSlice(allocator, ", *?*anyopaque");
+            try param_vtbl_types.append(allocator, try allocator.dupe(u8, "*?*anyopaque"));
+            try param_logical_types.append(allocator, try allocator.dupe(u8, "*?*anyopaque"));
+            try byref_indices.append(allocator, synth_base + 1);
+        } else if (!std.mem.eql(u8, ret_type_raw, "void")) {
+            const is_iface_ret = isInterfaceType(ret_type_raw);
+            const synth_param_idx: u32 = @intCast(param_vtbl_types.items.len);
+
+            // Synthesize vtbl out-param
+            // Known value types (i32, bool, f64, GridLength, Color, EventRegistrationToken) use *T at ABI
+            // Everything else (interfaces, HSTRING, unknown structs like Thickness) becomes *?*anyopaque
+            const is_known_value = isBuiltinType(ret_type_raw) or isKnownStruct(ret_type_raw) or std.mem.eql(u8, ret_type_raw, "EventRegistrationToken");
+            const is_opaque_ptr = !is_known_value;
+            if (is_opaque_ptr) {
+                try vtbl_params.appendSlice(allocator, ", *?*anyopaque");
+                try param_vtbl_types.append(allocator, try allocator.dupe(u8, "*?*anyopaque"));
+                try param_logical_types.append(allocator, try std.fmt.allocPrint(allocator, "*{s}", .{ret_type_raw}));
+            } else {
+                const vtbl_out_type = try std.fmt.allocPrint(allocator, "*{s}", .{ret_type_raw});
+                defer allocator.free(vtbl_out_type);
+                try vtbl_params.appendSlice(allocator, ", ");
+                try vtbl_params.appendSlice(allocator, vtbl_out_type);
+                try param_vtbl_types.append(allocator, try allocator.dupe(u8, vtbl_out_type));
+                try param_logical_types.append(allocator, try std.fmt.allocPrint(allocator, "*{s}", .{ret_type_raw}));
+            }
+            try byref_indices.append(allocator, synth_param_idx);
+
+            // For getters, set wrapper_ret based on the return type
+            if (is_getter) {
+                allocator.free(wrapper_ret);
+                if (is_iface_ret) {
+                    wrapper_ret = try std.fmt.allocPrint(allocator, "*{s}", .{ret_type_raw});
+                } else if (is_opaque_ptr) {
+                    // HSTRING/?*anyopaque: opaque getter, wrapper_ret stays as ?*anyopaque for nullable path
+                    wrapper_ret = try allocator.dupe(u8, "?*anyopaque");
+                } else if (isBuiltinType(ret_type_raw) or isKnownStruct(ret_type_raw) or
+                    std.mem.eql(u8, ret_type_raw, "EventRegistrationToken"))
+                {
+                    // Known primitive/struct: return by value
+                    wrapper_ret = try allocator.dupe(u8, ret_type_raw);
+                } else {
+                    // Unknown struct type (Thickness, CornerRadius, etc): treat as opaque
+                    wrapper_ret = try allocator.dupe(u8, "?*anyopaque");
                 }
             }
         }
@@ -377,17 +338,58 @@ pub fn emitInterface(
         }
         try seen_norm_names.put(try allocator.dupe(u8, norm_name), norm_prev + 1);
 
-        var vtbl_sig = try std.fmt.allocPrint(allocator, "*const fn ({s}) callconv(.winapi) HRESULT", .{vtbl_params.items});
+        const vtbl_sig = try std.fmt.allocPrint(allocator, "*const fn ({s}) callconv(.winapi) HRESULT", .{vtbl_params.items});
         var wrapper_sig: []const u8 = undefined;
         var wrapper_call: []const u8 = undefined;
         var raw_wrapper_sig: []const u8 = undefined;
         var raw_wrapper_call: []const u8 = undefined;
 
         if (is_getter) {
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !{s}", .{ norm_name, wrapper_ret });
-            wrapper_call = try std.fmt.allocPrint(allocator, "var out: {s} = undefined; try hrCheck(self.lpVtbl.{s}(self, &out)); return out;", .{ wrapper_ret, unique });
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !{s}", .{ unique, wrapper_ret });
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{ norm_name });
+            const iface_inner = if (std.mem.startsWith(u8, wrapper_ret, "*")) wrapper_ret[1..] else wrapper_ret;
+            const is_iface_getter = std.mem.startsWith(u8, wrapper_ret, "*") and isInterfaceType(iface_inner);
+            const is_importable_iface = is_iface_getter and isImportableInterface(iface_inner);
+            const is_nullable_getter = (std.mem.eql(u8, type_name, "IWindow") or std.mem.eql(u8, type_name, "IContentControl")) and std.mem.eql(u8, name, "get_Content");
+
+            if (is_nullable_getter) {
+                // Nullable interface getter: returns ?*IInspectable
+                wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !?*IInspectable", .{norm_name});
+                wrapper_call = try std.fmt.allocPrint(
+                    allocator,
+                    "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); if (out) |p| return @ptrCast(@alignCast(p)); return null;",
+                    .{unique},
+                );
+                raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !?*IInspectable", .{unique});
+                raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
+            } else if (is_importable_iface) {
+                // Known interface getter: returns *InterfaceName with ptrCast
+                wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !{s}", .{ norm_name, wrapper_ret });
+                wrapper_call = try std.fmt.allocPrint(
+                    allocator,
+                    "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); return @ptrCast(@alignCast(out orelse return error.WinRTFailed));",
+                    .{unique},
+                );
+                raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !{s}", .{ unique, wrapper_ret });
+                raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
+            } else if (is_iface_getter or std.mem.eql(u8, wrapper_ret, "?*anyopaque")) {
+                // Opaque getter (unknown generic like IMap): returns *anyopaque with null check
+                allocator.free(wrapper_ret);
+                wrapper_ret = try allocator.dupe(u8, "*anyopaque");
+                wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*anyopaque", .{norm_name});
+                wrapper_call = try std.fmt.allocPrint(
+                    allocator,
+                    "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); return out orelse error.WinRTFailed;",
+                    .{unique},
+                );
+                raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*anyopaque", .{unique});
+                raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
+            } else {
+                // Value/primitive getter
+                const init = defaultInit(wrapper_ret);
+                wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !{s}", .{ norm_name, wrapper_ret });
+                wrapper_call = try std.fmt.allocPrint(allocator, "var out: {s} = {s}; try hrCheck(self.lpVtbl.{s}(self, &out)); return out;", .{ wrapper_ret, init, unique });
+                raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !{s}", .{ unique, wrapper_ret });
+                raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
+            }
         } else {
             // CreateInstance must preserve COM aggregation shape:
             // outer -> { inner, instance }
@@ -408,335 +410,157 @@ pub fn emitInterface(
                     .{unique},
                 );
                 raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(outer);", .{norm_name});
+            } else if (byref_indices.items.len > 0) {
+                // Out-param wrapper: trailing BYREF params become return values
+                // Build wrapper sig with only non-byref params
+                var out_wrapper_params = std.ArrayList(u8).empty;
+                defer out_wrapper_params.deinit(allocator);
+                var out_fwd_args = std.ArrayList(u8).empty;
+                defer out_fwd_args.deinit(allocator);
+                var out_call_args = std.ArrayList(u8).empty;
+                defer out_call_args.deinit(allocator);
+                try out_call_args.appendSlice(allocator, "self");
+                var out_locals = std.ArrayList(u8).empty;
+                defer out_locals.deinit(allocator);
+                var out_ret_fields = std.ArrayList(u8).empty;
+                defer out_ret_fields.deinit(allocator);
+                var out_ret_vals = std.ArrayList(u8).empty;
+                defer out_ret_vals.deinit(allocator);
+                var byref_count: u32 = 0;
+
+                const actual_param_count: u32 = @intCast(param_vtbl_types.items.len);
+                var pi: u32 = 0;
+                while (pi < actual_param_count) : (pi += 1) {
+                    var is_out = false;
+                    for (byref_indices.items) |bi| {
+                        if (bi == pi) { is_out = true; break; }
+                    }
+                    const pvt = param_vtbl_types.items[pi];
+                    if (is_out) {
+                        // BYREF param: pvt starts with "*", inner type is pvt[1..]
+                        const inner_type = if (std.mem.startsWith(u8, pvt, "*")) pvt[1..] else pvt;
+                        const local_name = try std.fmt.allocPrint(allocator, "out{d}", .{byref_count});
+                        defer allocator.free(local_name);
+                        // Default init: pointers/optionals = null, integers = 0, else = undefined
+                        const default_val = if (std.mem.eql(u8, inner_type, "bool"))
+                            "false"
+                        else if (std.mem.startsWith(u8, inner_type, "?") or std.mem.startsWith(u8, inner_type, "*"))
+                            "null"
+                        else if (std.mem.eql(u8, inner_type, "i32") or std.mem.eql(u8, inner_type, "u32") or
+                            std.mem.eql(u8, inner_type, "i64") or std.mem.eql(u8, inner_type, "u64") or
+                            std.mem.eql(u8, inner_type, "i16") or std.mem.eql(u8, inner_type, "u16") or
+                            std.mem.eql(u8, inner_type, "i8") or std.mem.eql(u8, inner_type, "u8") or
+                            std.mem.eql(u8, inner_type, "isize") or std.mem.eql(u8, inner_type, "usize") or
+                            std.mem.eql(u8, inner_type, "f32") or std.mem.eql(u8, inner_type, "f64") or
+                            std.mem.eql(u8, inner_type, "EventRegistrationToken"))
+                            "0"
+                        else
+                            "undefined";
+                        try out_locals.appendSlice(allocator, "var ");
+                        try out_locals.appendSlice(allocator, local_name);
+                        try out_locals.appendSlice(allocator, ": ");
+                        try out_locals.appendSlice(allocator, inner_type);
+                        try out_locals.appendSlice(allocator, " = ");
+                        try out_locals.appendSlice(allocator, default_val);
+                        try out_locals.appendSlice(allocator, "; ");
+
+                        try out_call_args.appendSlice(allocator, ", &");
+                        try out_call_args.appendSlice(allocator, local_name);
+
+                        try out_ret_fields.appendSlice(allocator, inner_type);
+                        try out_ret_fields.appendSlice(allocator, ", ");
+
+                        try out_ret_vals.appendSlice(allocator, local_name);
+                        try out_ret_vals.appendSlice(allocator, ", ");
+
+                        byref_count += 1;
+                    } else {
+                        // Non-BYREF param: include in wrapper signature
+                        const p_name = try std.fmt.allocPrint(allocator, "p{d}", .{pi});
+                        defer allocator.free(p_name);
+                        try out_fwd_args.appendSlice(allocator, ", ");
+                        try out_fwd_args.appendSlice(allocator, p_name);
+                        try out_wrapper_params.appendSlice(allocator, ", ");
+                        try out_wrapper_params.appendSlice(allocator, p_name);
+                        try out_wrapper_params.appendSlice(allocator, ": ");
+                        if (std.mem.eql(u8, pvt, "HSTRING")) {
+                            try out_wrapper_params.appendSlice(allocator, "anytype");
+                        } else if (std.mem.startsWith(u8, pvt, "?*")) {
+                            try out_wrapper_params.appendSlice(allocator, pvt);
+                        } else {
+                            try out_wrapper_params.appendSlice(allocator, pvt);
+                        }
+
+                        try out_call_args.appendSlice(allocator, ", ");
+                        if (std.mem.eql(u8, pvt, "HSTRING")) {
+                            try out_call_args.appendSlice(allocator, "@ptrCast(");
+                            try out_call_args.appendSlice(allocator, p_name);
+                            try out_call_args.appendSlice(allocator, ")");
+                        } else {
+                            try out_call_args.appendSlice(allocator, p_name);
+                        }
+                    }
+                }
+
+                if (byref_count == 1) {
+                    // Single out-param: return it directly
+                    const out_type = param_vtbl_types.items[byref_indices.items[0]];
+                    const inner_type = if (std.mem.startsWith(u8, out_type, "*")) out_type[1..] else out_type;
+                    // Get logical type for interface detection
+                    const logical_type = param_logical_types.items[byref_indices.items[0]];
+                    const logical_inner = if (std.mem.startsWith(u8, logical_type, "*")) logical_type[1..] else logical_type;
+                    const is_iface_out = isInterfaceType(logical_inner);
+                    const is_importable = is_iface_out and isImportableInterface(logical_inner);
+
+                    if (is_importable) {
+                        // Known importable interface out-param: return typed pointer with ptrCast
+                        wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !*{s}", .{ norm_name, out_wrapper_params.items, logical_inner });
+                        wrapper_call = try std.fmt.allocPrint(
+                            allocator,
+                            "var out0: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}({s})); return @ptrCast(@alignCast(out0 orelse return error.WinRTFailed));",
+                            .{ unique, out_call_args.items },
+                        );
+                        raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !*{s}", .{ unique, out_wrapper_params.items, logical_inner });
+                    } else {
+                        wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !{s}", .{ norm_name, out_wrapper_params.items, inner_type });
+                        wrapper_call = try std.fmt.allocPrint(allocator, "{s}try hrCheck(self.lpVtbl.{s}({s})); return out0;", .{ out_locals.items, unique, out_call_args.items });
+                        raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !{s}", .{ unique, out_wrapper_params.items, inner_type });
+                    }
+                    const fwd_args = if (out_fwd_args.items.len > 2) out_fwd_args.items[2..] else "";
+                    raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}({s});", .{ norm_name, fwd_args });
+                } else if (byref_count == 2 and std.mem.eql(u8, name, "GetXmlnsDefinitions")) {
+                    // GetXmlnsDefinitions: 2 out-params → named struct return
+                    wrapper_sig = try std.fmt.allocPrint(
+                        allocator,
+                        "pub fn {s}(self: *@This()) !struct {{ count: u32, definitions: ?*anyopaque }}",
+                        .{norm_name},
+                    );
+                    wrapper_call = try std.fmt.allocPrint(
+                        allocator,
+                        "var count: u32 = 0; var definitions: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &count, &definitions)); return .{{ .count = count, .definitions = definitions }};",
+                        .{unique},
+                    );
+                    raw_wrapper_sig = try std.fmt.allocPrint(
+                        allocator,
+                        "pub fn {s}(self: *@This()) !struct {{ count: u32, definitions: ?*anyopaque }}",
+                        .{unique},
+                    );
+                    raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
+                } else {
+                    // Multiple out-params: return a struct (fallback to void for now)
+                    wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !void", .{ norm_name, wrapper_params.items });
+                    wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}({s}));", .{ unique, call_args.items });
+                    raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !void", .{ unique, wrapper_params.items });
+                    const fwd_args = if (wrapper_fwd_args.items.len > 2) wrapper_fwd_args.items[2..] else "";
+                    raw_wrapper_call = try std.fmt.allocPrint(allocator, "try self.{s}({s});", .{ norm_name, fwd_args });
+                }
             } else {
                 wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !void", .{ norm_name, wrapper_params.items });
                 wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}({s}));", .{ unique, call_args.items });
                 raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !void", .{ unique, wrapper_params.items });
-                const args_suffix = if (call_args.items.len > 5) call_args.items[5..] else "";
-                raw_wrapper_call = try std.fmt.allocPrint(allocator, "try self.{s}({s});", .{ norm_name, args_suffix });
+                const fwd_args = if (wrapper_fwd_args.items.len > 2) wrapper_fwd_args.items[2..] else "";
+                raw_wrapper_call = try std.fmt.allocPrint(allocator, "try self.{s}({s});", .{ norm_name, fwd_args });
             }
-        }
-
-        // Hard ABI contracts used by Ghostty call sites.
-        if (std.mem.eql(u8, type_name, "ITabView") and std.mem.eql(u8, name, "get_TabItems")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IVector", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(
-                allocator,
-                "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); return @ptrCast(@alignCast(out.?));",
-                .{unique},
-            );
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IVector", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "ITabView") and
-            (std.mem.eql(u8, name, "add_TabCloseRequested") or
-            std.mem.eql(u8, name, "add_AddTabButtonClick") or
-            std.mem.eql(u8, name, "add_SelectionChanged")))
-        {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, ?*anyopaque, *EventRegistrationToken) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: anytype) !EventRegistrationToken", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(
-                allocator,
-                "var t: EventRegistrationToken = 0; try hrCheck(self.lpVtbl.{s}(self, @ptrCast(p0), &t)); return t;",
-                .{unique},
-            );
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: anytype) !EventRegistrationToken", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "IWindow") and std.mem.eql(u8, name, "add_Closed")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, ?*anyopaque, *EventRegistrationToken) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque) !EventRegistrationToken", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(
-                allocator,
-                "var t: EventRegistrationToken = 0; try hrCheck(self.lpVtbl.{s}(self, p0, &t)); return t;",
-                .{unique},
-            );
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque) !EventRegistrationToken", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "ITabView") and std.mem.eql(u8, name, "get_SelectedIndex")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *i32) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !i32", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(allocator, "var out: i32 = 0; try hrCheck(self.lpVtbl.{s}(self, &out)); return out;", .{unique});
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !i32", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "ITabView") and std.mem.eql(u8, name, "get_SelectedItem")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IInspectable", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(allocator, "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); return @ptrCast(@alignCast(out.?));", .{unique});
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IInspectable", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
-        }
-
-        if ((std.mem.eql(u8, type_name, "IWindow") or std.mem.eql(u8, type_name, "IContentControl")) and std.mem.eql(u8, name, "get_Content")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !?*IInspectable", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(allocator, "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); if (out) |p| return @ptrCast(@alignCast(p)); return null;", .{unique});
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !?*IInspectable", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "ITabViewTabCloseRequestedEventArgs") and std.mem.eql(u8, name, "get_Tab")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IInspectable", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(allocator, "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); return @ptrCast(@alignCast(out.?));", .{unique});
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IInspectable", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
-        }
-
-        if ((std.mem.eql(u8, name, "put_Content") or std.mem.eql(u8, name, "put_Background") or std.mem.eql(u8, name, "put_Header"))) {
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque) !void", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}(self, p0));", .{unique});
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque) !void", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
-        }
-
-        if (std.mem.startsWith(u8, name, "remove_") and param_count == 1) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, EventRegistrationToken) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: EventRegistrationToken) !void", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}(self, p0));", .{unique});
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: EventRegistrationToken) !void", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "IFrameworkElement") and (std.mem.eql(u8, name, "add_Loaded") or std.mem.eql(u8, name, "add_SizeChanged"))) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, ?*anyopaque, *EventRegistrationToken) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque) !EventRegistrationToken", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(
-                allocator,
-                "var t: EventRegistrationToken = 0; try hrCheck(self.lpVtbl.{s}(self, p0, &t)); return t;",
-                .{unique},
-            );
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque) !EventRegistrationToken", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "IApplicationFactory") and std.mem.eql(u8, name, "CreateInstance")) {
-            allocator.free(vtbl_sig);
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, ?*anyopaque, *?*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
-        }
-
-        if (std.mem.eql(u8, type_name, "IXamlMetadataProvider") and std.mem.eql(u8, name, "GetXmlnsDefinitions")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *u32, *?*anyopaque) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(
-                allocator,
-                "pub fn {s}(self: *@This()) !struct {{ count: u32, definitions: ?*anyopaque }}",
-                .{norm_name},
-            );
-            wrapper_call = try std.fmt.allocPrint(
-                allocator,
-                "var count: u32 = 0; var definitions: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &count, &definitions)); return .{{ .count = count, .definitions = definitions }};",
-                .{unique},
-            );
-            raw_wrapper_sig = try std.fmt.allocPrint(
-                allocator,
-                "pub fn {s}(self: *@This()) !struct {{ count: u32, definitions: ?*anyopaque }}",
-                .{unique},
-            );
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "IXamlMetadataProvider") and
-            (std.mem.eql(u8, name, "GetXamlType") or std.mem.eql(u8, unique, "GetXamlType_2")))
-        {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, ?*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque) !*IXamlType", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(
-                allocator,
-                "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, p0, &out)); return @ptrCast(@alignCast(out.?));",
-                .{unique},
-            );
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque) !*IXamlType", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "IXamlType") and std.mem.eql(u8, name, "ActivateInstance")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IInspectable", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(
-                allocator,
-                "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); return @ptrCast(@alignCast(out.?));",
-                .{unique},
-            );
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IInspectable", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "ISolidColorBrush") and std.mem.eql(u8, name, "put_Color")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, Color) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: Color) !void", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}(self, p0));", .{unique});
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: Color) !void", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "IPanel") and std.mem.eql(u8, name, "get_Children")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IVector", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(
-                allocator,
-                "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); return @ptrCast(@alignCast(out.?));",
-                .{unique},
-            );
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IVector", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "IGrid") and std.mem.eql(u8, name, "get_RowDefinitions")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *?*anyopaque) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IVector", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(
-                allocator,
-                "var out: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &out)); return @ptrCast(@alignCast(out.?));",
-                .{unique},
-            );
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !*IVector", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "IGridStatics") and (std.mem.eql(u8, name, "SetRow") or std.mem.eql(u8, name, "SetColumn"))) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, ?*anyopaque, i32) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque, p1: i32) !void", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}(self, p0, p1));", .{unique});
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: ?*anyopaque, p1: i32) !void", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0, p1);", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "IRowDefinition") and std.mem.eql(u8, name, "put_Height")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, GridLength) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: GridLength) !void", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}(self, p0));", .{unique});
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(), p0: GridLength) !void", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(p0);", .{norm_name});
-        }
-
-        if (std.mem.eql(u8, type_name, "IRowDefinition") and std.mem.eql(u8, name, "get_Height")) {
-            allocator.free(vtbl_sig);
-            allocator.free(wrapper_sig);
-            allocator.free(wrapper_call);
-            allocator.free(raw_wrapper_sig);
-            allocator.free(raw_wrapper_call);
-
-            vtbl_sig = try allocator.dupe(u8, "*const fn (*anyopaque, *GridLength) callconv(.winapi) HRESULT");
-            wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !GridLength", .{norm_name});
-            wrapper_call = try std.fmt.allocPrint(
-                allocator,
-                "var out: GridLength = .{{ .Value = 0, .GridUnitType = 0 }}; try hrCheck(self.lpVtbl.{s}(self, &out)); return out;",
-                .{unique},
-            );
-            raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This()) !GridLength", .{unique});
-            raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
         }
 
         try methods.append(allocator, .{ .raw_name = try allocator.dupe(u8, unique), .norm_name = norm_name, .vtbl_sig = vtbl_sig, .wrapper_sig = wrapper_sig, .wrapper_call = wrapper_call, .raw_wrapper_sig = raw_wrapper_sig, .raw_wrapper_call = raw_wrapper_call });
@@ -806,6 +630,52 @@ pub fn emitStruct(allocator: std.mem.Allocator, writer: anytype, ctx: Context, t
         try writer.print("    {s}: {s},\n", .{ name, ty });
     }
     try writer.writeAll("};\n\n");
+}
+
+fn isKnownStruct(name: []const u8) bool {
+    const structs = [_][]const u8{ "GridLength", "Color" };
+    for (structs) |s| if (std.mem.eql(u8, name, s)) return true;
+    return false;
+}
+
+/// Returns true if the interface type is importable (defined in generated output or com_native).
+/// Unknown interfaces (ICommand, IXamlMember, etc.) should use *anyopaque instead.
+fn isImportableInterface(name: []const u8) bool {
+    const importable = [_][]const u8{ "IInspectable", "IVector", "IXamlType" };
+    for (importable) |iface| if (std.mem.eql(u8, name, iface)) return true;
+    return false;
+}
+
+fn isInterfaceType(name: []const u8) bool {
+    // Returns true if the name is a known WinRT interface type.
+    // WinRT interfaces always start with 'I' followed by uppercase.
+    if (isBuiltinType(name)) return false;
+    if (isKnownStruct(name)) return false;
+    if (std.mem.eql(u8, name, "EventRegistrationToken")) return false;
+    if (std.mem.eql(u8, name, "?*anyopaque")) return false;
+    if (std.mem.eql(u8, name, "anyopaque")) return false;
+    if (std.mem.startsWith(u8, name, "?")) return false;
+    if (std.mem.startsWith(u8, name, "[")) return false; // [*]const u16 etc.
+    if (std.mem.startsWith(u8, name, "*")) return isInterfaceType(name[1..]);
+    if (name.len < 2) return false;
+    // Interface names: IFoo, IBar (I + uppercase)
+    return name[0] == 'I' and name[1] >= 'A' and name[1] <= 'Z';
+}
+
+fn defaultInit(ty: []const u8) []const u8 {
+    if (std.mem.startsWith(u8, ty, "?") or std.mem.startsWith(u8, ty, "*")) return "null";
+    if (std.mem.eql(u8, ty, "HSTRING")) return "null"; // HSTRING = ?*anyopaque
+    if (std.mem.eql(u8, ty, "bool")) return "false";
+    if (std.mem.eql(u8, ty, "i32") or std.mem.eql(u8, ty, "u32") or
+        std.mem.eql(u8, ty, "i64") or std.mem.eql(u8, ty, "u64") or
+        std.mem.eql(u8, ty, "i16") or std.mem.eql(u8, ty, "u16") or
+        std.mem.eql(u8, ty, "i8") or std.mem.eql(u8, ty, "u8") or
+        std.mem.eql(u8, ty, "f32") or std.mem.eql(u8, ty, "f64") or
+        std.mem.eql(u8, ty, "isize") or std.mem.eql(u8, ty, "usize") or
+        std.mem.eql(u8, ty, "EventRegistrationToken")) return "0";
+    if (std.mem.eql(u8, ty, "GridLength")) return ".{ .Value = 0, .GridUnitType = 0 }";
+    if (std.mem.eql(u8, ty, "Color")) return ".{ .a = 0, .r = 0, .g = 0, .b = 0 }";
+    return "undefined";
 }
 
 fn isBuiltinType(t: []const u8) bool {
@@ -922,7 +792,11 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
         0x0c => try allocator.dupe(u8, "f32"),
         0x0d => try allocator.dupe(u8, "f64"),
         0x0e => try allocator.dupe(u8, "[*]const u16"),
-        0x10 => try allocator.dupe(u8, "anyopaque"),
+        0x10 => blk: {
+            const inner = try decodeSigType(allocator, ctx, c, is_winrt_iface) orelse break :blk null;
+            defer if (!isBuiltinType(inner)) allocator.free(inner);
+            break :blk try std.fmt.allocPrint(allocator, "*{s}", .{inner});
+        },
         0x0f => blk: {
             const inner = try decodeSigType(allocator, ctx, c, is_winrt_iface) orelse break :blk null;
             defer if (!isBuiltinType(inner)) allocator.free(inner);
@@ -940,19 +814,64 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
             if (std.mem.eql(u8, full, "System.Guid")) break :blk try allocator.dupe(u8, "GUID");
             if (std.mem.eql(u8, full, "System.IntPtr")) break :blk try allocator.dupe(u8, "isize");
             if (std.mem.eql(u8, full, "System.UIntPtr")) break :blk try allocator.dupe(u8, "usize");
-            const dot = std.mem.lastIndexOfScalar(u8, full, '.') orelse return try allocator.dupe(u8, full);
-            const short = full[dot+1..];
-            const t = ctx.table_info.getTable(.TypeDef);
+            const dot = std.mem.lastIndexOfScalar(u8, full, '.');
+            const short = if (dot) |d| full[d+1..] else full;
             var found_td: ?u32 = null;
-            var row: u32 = 1;
-            while (row <= t.row_count) : (row += 1) {
-                const td = try ctx.table_info.readTypeDef(row);
-                const name_td = try ctx.heaps.getString(td.type_name);
-                if (std.mem.eql(u8, name_td, short)) { found_td = row; break; }
+            if (tdor.table == .TypeDef) {
+                found_td = tdor.row;
+            } else {
+                const t = ctx.table_info.getTable(.TypeDef);
+                var row: u32 = 1;
+                while (row <= t.row_count) : (row += 1) {
+                    const td = try ctx.table_info.readTypeDef(row);
+                    const name_td = try ctx.heaps.getString(td.type_name);
+                    if (std.mem.eql(u8, name_td, short)) { found_td = row; break; }
+                }
             }
             if (found_td) |td_row| {
                 const cat = identifyTypeCategory(ctx, td_row) catch .other;
-                if (cat == .enum_type or cat == .struct_type) break :blk try allocator.dupe(u8, short);
+                if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
+                if (cat == .struct_type) break :blk try allocator.dupe(u8, short);
+                if (cat == .interface) break :blk try allocator.dupe(u8, short);
+            }
+            // Well-known types without TypeDef in this winmd
+            if (std.mem.eql(u8, short, "IInspectable")) break :blk try allocator.dupe(u8, "IInspectable");
+            if (std.mem.eql(u8, short, "IXamlType")) break :blk try allocator.dupe(u8, "IXamlType");
+            if (std.mem.eql(u8, short, "EventRegistrationToken")) break :blk try allocator.dupe(u8, "EventRegistrationToken");
+            if (isKnownStruct(short)) break :blk try allocator.dupe(u8, short);
+            break :blk try allocator.dupe(u8, "?*anyopaque");
+        },
+        0x1d => blk: {
+            // SZARRAY: consume element type to keep cursor aligned
+            const elem = try decodeSigType(allocator, ctx, c, is_winrt_iface);
+            if (elem) |e| if (!isBuiltinType(e)) allocator.free(e);
+            // WinRT array return: becomes [out] uint32, [out] T* at ABI level
+            // Return a marker so the caller can detect it
+            break :blk try allocator.dupe(u8, "SZARRAY");
+        },
+        0x15 => blk: {
+            // GENERICINST: marker CLASS/VALUETYPE, TypeDefOrRef, count, type_args...
+            _ = c.readByte() orelse break :blk try allocator.dupe(u8, "?*anyopaque"); // CLASS (0x12) or VALUETYPE (0x11)
+            const tdor_idx = c.readCompressedUInt() orelse break :blk try allocator.dupe(u8, "?*anyopaque");
+            const gen_arg_count = c.readCompressedUInt() orelse break :blk try allocator.dupe(u8, "?*anyopaque");
+            // Consume all generic type arguments to keep cursor aligned
+            var ga: u32 = 0;
+            while (ga < gen_arg_count) : (ga += 1) {
+                const arg = try decodeSigType(allocator, ctx, c, is_winrt_iface);
+                if (arg) |a| if (!isBuiltinType(a)) allocator.free(a);
+            }
+            // Resolve the base type name
+            const tdor = try coded.decodeTypeDefOrRef(tdor_idx);
+            const full = try resolveTypeDefOrRefNameRaw(ctx, tdor) orelse break :blk try allocator.dupe(u8, "?*anyopaque");
+            // Strip namespace
+            const dot = std.mem.lastIndexOfScalar(u8, full, '.');
+            const short_raw = if (dot) |d| full[d + 1 ..] else full;
+            // Strip backtick arity suffix (e.g., "IVector`1" -> "IVector")
+            const backtick = std.mem.indexOfScalar(u8, short_raw, '`');
+            const short = if (backtick) |bt| short_raw[0..bt] else short_raw;
+            // Check if it's a known generated or imported type
+            if (std.mem.eql(u8, short, "IVector")) {
+                break :blk try allocator.dupe(u8, "IVector");
             }
             break :blk try allocator.dupe(u8, "?*anyopaque");
         },
