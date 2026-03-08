@@ -1334,3 +1334,321 @@ test "WINUI #120: IWindow.DispatcherQueue resolves, not anyopaque" {
     const bad = "pub fn DispatcherQueue(self: *@This()) !*anyopaque";
     try std.testing.expect(std.mem.indexOf(u8, generated, bad) == null);
 }
+
+// ============================================================
+// WinUI exact shape comparator (#121)
+// WinMD-derived vtable shape verification: compares generated
+// code against MethodDef metadata for completeness and quality.
+// ============================================================
+
+const WinmdMethodShape = struct {
+    name: []const u8,
+    param_count: u32, // excluding return param (sequence 0)
+    is_getter: bool,
+    is_setter: bool,
+};
+
+const WinmdTypeShape = struct {
+    name: []const u8,
+    category: emit.TypeCategory,
+    methods: std.ArrayList(WinmdMethodShape),
+
+    fn deinit(self: *WinmdTypeShape, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        self.methods.deinit(allocator);
+    }
+};
+
+/// Read WinMD MethodDef rows for a given type and return its shape.
+fn extractWinmdShape(allocator: std.mem.Allocator, ctx: *GenCtx, type_name: []const u8) !WinmdTypeShape {
+    const row = try findExactTypeRow(ctx, type_name) orelse return error.TypeNotFound;
+    const category = try emit.identifyTypeCategory(ctx.emit_ctx, row);
+
+    const td = try ctx.table_info.readTypeDef(row);
+    const method_start = td.method_list;
+    const td_table = ctx.table_info.getTable(.TypeDef);
+    const method_end = if (row < td_table.row_count)
+        (try ctx.table_info.readTypeDef(row + 1)).method_list
+    else
+        ctx.table_info.getTable(.MethodDef).row_count + 1;
+
+    var methods = std.ArrayList(WinmdMethodShape).empty;
+    errdefer methods.deinit(allocator);
+
+    var mi: u32 = method_start;
+    while (mi < method_end) : (mi += 1) {
+        const md = try ctx.table_info.readMethodDef(mi);
+        const name = try ctx.heaps.getString(md.name);
+
+        // Count params (exclude return param with sequence 0)
+        const param_start = md.param_list;
+        const param_end = if (mi < ctx.table_info.getTable(.MethodDef).row_count)
+            (try ctx.table_info.readMethodDef(mi + 1)).param_list
+        else
+            ctx.table_info.getTable(.Param).row_count + 1;
+
+        var param_count: u32 = 0;
+        var pi: u32 = param_start;
+        while (pi < param_end) : (pi += 1) {
+            const p = try ctx.table_info.readParam(pi);
+            if (p.sequence != 0) param_count += 1;
+        }
+
+        try methods.append(allocator, .{
+            .name = name,
+            .param_count = param_count,
+            .is_getter = std.mem.startsWith(u8, name, "get_"),
+            .is_setter = std.mem.startsWith(u8, name, "put_"),
+        });
+    }
+
+    return .{
+        .name = try allocator.dupe(u8, type_name),
+        .category = category,
+        .methods = methods,
+    };
+}
+
+/// Count `?*anyopaque` occurrences inside VTable blocks in generated text,
+/// excluding IUnknown/IInspectable base method lines (QueryInterface, AddRef,
+/// Release, and VtblPlaceholder slots like GetIids/GetRuntimeClassName/GetTrustLevel).
+fn countAnyopaqueInVtable(text: []const u8) u32 {
+    var count: u32 = 0;
+    var in_vtable = false;
+    var depth: i32 = 0;
+    var lines = std.mem.tokenizeScalar(u8, text, '\n');
+    while (lines.next()) |raw_line| {
+        const line = trimLine(raw_line);
+        if (!in_vtable) {
+            if (std.mem.startsWith(u8, line, "pub const VTable = extern struct {")) {
+                in_vtable = true;
+                depth = braceDelta(line);
+            }
+            continue;
+        }
+        // Skip base method lines — these always contain anyopaque by design
+        const is_base_line = std.mem.startsWith(u8, line, "QueryInterface:") or
+            std.mem.startsWith(u8, line, "AddRef:") or
+            std.mem.startsWith(u8, line, "Release:") or
+            std.mem.indexOf(u8, line, "VtblPlaceholder") != null;
+        if (!is_base_line) {
+            // Count ?*anyopaque in non-base vtable lines
+            var search: usize = 0;
+            while (std.mem.indexOfPos(u8, line, search, "?*anyopaque")) |pos| {
+                count += 1;
+                search = pos + "?*anyopaque".len;
+            }
+        }
+        depth += braceDelta(line);
+        if (depth <= 0) in_vtable = false;
+    }
+    return count;
+}
+
+/// IUnknown/IInspectable base method names to skip in completeness checks.
+const base_methods = [_][]const u8{
+    "QueryInterface",
+    "AddRef",
+    "Release",
+    "GetIids",
+    "GetRuntimeClassName",
+    "GetTrustLevel",
+};
+
+fn isBaseMethod(name: []const u8) bool {
+    for (&base_methods) |bm| {
+        if (std.mem.eql(u8, name, bm)) return true;
+    }
+    return false;
+}
+
+/// Derive expected wrapper name from WinMD method name.
+/// get_Foo → Foo, put_Foo → Foo (setter), Invoke → invoke
+fn expectedWrapperName(allocator: std.mem.Allocator, winmd_name: []const u8) ![]const u8 {
+    if (std.mem.startsWith(u8, winmd_name, "get_")) {
+        return try allocator.dupe(u8, winmd_name[4..]);
+    }
+    if (std.mem.startsWith(u8, winmd_name, "put_")) {
+        return try allocator.dupe(u8, winmd_name[4..]);
+    }
+    // First char lowercase for wrapper (e.g. Invoke → invoke)
+    var buf = try allocator.dupe(u8, winmd_name);
+    if (buf.len > 0 and std.ascii.isUpper(buf[0])) {
+        buf[0] = std.ascii.toLower(buf[0]);
+    }
+    return buf;
+}
+
+const ShapeProbeResult = struct {
+    vtable_missing: std.ArrayList([]const u8),
+    wrapper_missing: std.ArrayList([]const u8),
+    anyopaque_count: u32,
+    winmd_method_count: u32,
+    vtable_slot_count: u32,
+
+    fn deinit(self: *ShapeProbeResult, allocator: std.mem.Allocator) void {
+        freeSliceList(allocator, &self.vtable_missing);
+        freeSliceList(allocator, &self.wrapper_missing);
+    }
+};
+
+/// Integrated shape probe: extract WinMD shape, generate code, compare.
+fn runExactShapeProbe(allocator: std.mem.Allocator, type_name: []const u8) !ShapeProbeResult {
+    const xaml = ensureXamlCtx() catch return error.SkipZigTest;
+
+    // Extract WinMD shape
+    var winmd_shape = try extractWinmdShape(allocator, xaml, type_name);
+    defer winmd_shape.deinit(allocator);
+
+    // Generate code
+    const generated = generateWinuiOutput(allocator, type_name) catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+
+    // Parse generated manifest
+    var manifest = try parseGeneratedManifest(allocator, generated);
+    defer manifest.deinit();
+
+    // Count anyopaque in vtable
+    const anyopaque_count = countAnyopaqueInVtable(generated);
+
+    // Find the type in the manifest
+    const gen_type = manifest.findType(type_name);
+
+    var vtable_missing = std.ArrayList([]const u8).empty;
+    errdefer freeSliceList(allocator, &vtable_missing);
+    var wrapper_missing = std.ArrayList([]const u8).empty;
+    errdefer freeSliceList(allocator, &wrapper_missing);
+
+    var non_base_count: u32 = 0;
+    for (winmd_shape.methods.items) |method| {
+        // Skip .ctor for delegates
+        if (std.mem.eql(u8, method.name, ".ctor")) continue;
+        // Skip IUnknown/IInspectable base methods
+        if (isBaseMethod(method.name)) continue;
+        non_base_count += 1;
+
+        if (gen_type) |gt| {
+            // Check vtable completeness: WinMD method name should exist as vtable slot
+            if (!containsStr(gt.vtable_methods.items, method.name)) {
+                try vtable_missing.append(allocator, try allocator.dupe(u8, method.name));
+            }
+
+            // Check wrapper presence for getters/setters
+            if (method.is_getter or method.is_setter) {
+                const wrapper = try expectedWrapperName(allocator, method.name);
+                defer allocator.free(wrapper);
+                if (!containsStr(gt.methods.items, wrapper)) {
+                    try wrapper_missing.append(allocator, try allocator.dupe(u8, method.name));
+                }
+            }
+        } else {
+            // Type not found in generated output at all
+            try vtable_missing.append(allocator, try allocator.dupe(u8, method.name));
+        }
+    }
+
+    const vtable_slot_count = if (gen_type) |gt| @as(u32, @intCast(gt.vtable_methods.items.len)) else 0;
+
+    return .{
+        .vtable_missing = vtable_missing,
+        .wrapper_missing = wrapper_missing,
+        .anyopaque_count = anyopaque_count,
+        .winmd_method_count = non_base_count,
+        .vtable_slot_count = vtable_slot_count,
+    };
+}
+
+/// Run exact shape probe and assert all checks pass.
+/// Logs detailed mismatch info on failure.
+fn assertExactShape(type_name: []const u8) !void {
+    const allocator = std.testing.allocator;
+    var result = runExactShapeProbe(allocator, type_name) catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer result.deinit(allocator);
+
+    var fail_count: usize = 0;
+
+    // Check vtable completeness
+    for (result.vtable_missing.items) |missing| {
+        std.log.err("[SHAPE {s}] vtable slot missing: {s}", .{ type_name, missing });
+        fail_count += 1;
+    }
+
+    // Check wrapper presence
+    for (result.wrapper_missing.items) |missing| {
+        std.log.err("[SHAPE {s}] wrapper missing for: {s}", .{ type_name, missing });
+        fail_count += 1;
+    }
+
+    // Check anyopaque count
+    if (result.anyopaque_count > 0) {
+        std.log.err("[SHAPE {s}] vtable has {d} ?*anyopaque slots (expected 0)", .{ type_name, result.anyopaque_count });
+        fail_count += 1;
+    }
+
+    std.log.info("[SHAPE {s}] WinMD methods={d}, vtable slots={d}, anyopaque={d}, vtable_missing={d}, wrapper_missing={d}", .{
+        type_name,
+        result.winmd_method_count,
+        result.vtable_slot_count,
+        result.anyopaque_count,
+        @as(u32, @intCast(result.vtable_missing.items.len)),
+        @as(u32, @intCast(result.wrapper_missing.items.len)),
+    });
+
+    if (fail_count > 0) {
+        return error.TestUnexpectedResult;
+    }
+}
+
+// ---- Seed type exact shape probes (Primary: not_impl == 0) ----
+
+test "SHAPE #121: IXamlReaderStatics exact shape" {
+    try assertExactShape("IXamlReaderStatics");
+}
+
+test "SHAPE #121: IKeyRoutedEventArgs exact shape" {
+    try assertExactShape("IKeyRoutedEventArgs");
+}
+
+test "SHAPE #121: ICharacterReceivedRoutedEventArgs exact shape" {
+    try assertExactShape("ICharacterReceivedRoutedEventArgs");
+}
+
+test "SHAPE #121: IPointerPoint exact shape" {
+    try assertExactShape("IPointerPoint");
+}
+
+test "SHAPE #121: IPointerPointProperties exact shape" {
+    try assertExactShape("IPointerPointProperties");
+}
+
+test "SHAPE #121: IRowDefinition exact shape" {
+    try assertExactShape("IRowDefinition");
+}
+
+test "SHAPE #121: IScrollEventArgs exact shape" {
+    try assertExactShape("IScrollEventArgs");
+}
+
+test "SHAPE #121: IColumnDefinition exact shape" {
+    try assertExactShape("IColumnDefinition");
+}
+
+test "SHAPE #121: ISolidColorBrush exact shape" {
+    try assertExactShape("ISolidColorBrush");
+}
+
+// ---- Secondary seed types (not_impl == 1) ----
+
+test "SHAPE #121: IScrollBar exact shape" {
+    try assertExactShape("IScrollBar");
+}
+
+test "SHAPE #121: ScrollEventHandler exact shape (delegate)" {
+    try assertExactShape("ScrollEventHandler");
+}
