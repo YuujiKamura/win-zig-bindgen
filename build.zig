@@ -78,21 +78,6 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(audit_step);
 
-    const red_test_bin = b.addTest(.{
-        .name = "test-red",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("tests/red_function_generation.zig"),
-            .target = target,
-            .optimize = optimize,
-        }),
-    });
-    red_test_bin.root_module.addImport("winmd2zig_main", main_module);
-    red_test_bin.root_module.addImport("win_zig_metadata", metadata_module);
-    const run_red_tests = b.addRunArtifact(red_test_bin);
-    const test_red_step = b.step("test-red", "Run RED parity tests");
-    test_red_step.dependOn(&run_red_tests.step);
-    test_step.dependOn(test_red_step);
-
     // Metadata table parity tests — verify row counts and field values against .NET reference
     const md_parity_bin = b.addTest(.{
         .name = "test-md-parity",
@@ -110,6 +95,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(test_md_parity_step);
 
     // Generation parity tests — verify actual code generation output
+    const gen_parity_filter = b.option([]const u8, "gen_filter", "Test name filter for gen-parity (e.g. 'GEN 049')");
     const gen_parity_bin = b.addTest(.{
         .name = "test-gen-parity",
         .root_module = b.createModule(.{
@@ -117,6 +103,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }),
+        .filters = if (gen_parity_filter) |f| &.{f} else &.{},
     });
     gen_parity_bin.root_module.addImport("winmd2zig_main", main_module);
     gen_parity_bin.root_module.addImport("win_zig_metadata", metadata_module);
@@ -133,7 +120,7 @@ pub fn build(b: *std.Build) void {
     sync_map_cmd.addArgs(&.{
         "--sync-rust-case-map",
         "shadow/windows-rs/bindgen-cases.json",
-        "tests/red_function_generation.zig",
+        "tests/generation_parity.zig",
         "docs/rust-parity-case-map.json",
     });
 

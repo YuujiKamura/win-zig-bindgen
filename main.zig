@@ -259,6 +259,7 @@ pub fn main() !void {
 
     var winmd_path: ?[]const u8 = null;
     var deploy_path: ?[]const u8 = null;
+    var no_deps = false;
     var iface_names = zig_std.ArrayList([]const u8).empty;
     defer iface_names.deinit(allocator);
 
@@ -270,6 +271,8 @@ pub fn main() !void {
             if (i + 1 < args.len) { i += 1; try iface_names.append(allocator, args[i]); }
         } else if (zig_std.mem.eql(u8, args[i], "--deploy")) {
             if (i + 1 < args.len) { i += 1; deploy_path = args[i]; }
+        } else if (zig_std.mem.eql(u8, args[i], "--no-deps")) {
+            no_deps = true;
         }
     }
 
@@ -290,8 +293,17 @@ pub fn main() !void {
 
     const table_info = try tables.parse(table_stream.data);
     const heaps = streams.Heaps{ .strings = strings_stream.data, .blob = blob_stream.data, .guid = guid_stream.data };
-    const ctx = emit.Context{ .table_info = table_info, .heaps = heaps };
+    var dependencies = zig_std.StringHashMap(void).init(allocator);
+    defer dependencies.deinit();
+    const ctx = emit.Context{ .table_info = table_info, .heaps = heaps, .dependencies = &dependencies, .allocator = allocator };
     const rctx = resolver.Context{ .table_info = table_info, .heaps = heaps };
+
+    var generated_types = zig_std.StringHashMap(void).init(allocator);
+    defer generated_types.deinit();
+    var to_generate = zig_std.ArrayList([]const u8).empty;
+    defer to_generate.deinit(allocator);
+
+    for (iface_names.items) |name| try to_generate.append(allocator, name);
 
     var out_buf = zig_std.ArrayList(u8).empty;
     defer out_buf.deinit(allocator);
@@ -299,21 +311,58 @@ pub fn main() !void {
 
     try emit.writePrologue(writer);
 
-    for (iface_names.items) |name| {
-        const type_row = emit.findTypeDefRow(ctx, name) catch |err| switch (err) {
-            error.InterfaceNotFound => try resolver.findTypeDefRowByFullName(rctx, name),
-            else => return err,
-        };
-        const cat = try emit.identifyTypeCategory(ctx, type_row);
+    var head: usize = 0;
+    while (head < to_generate.items.len) : (head += 1) {
+        const name = to_generate.items[head];
+        if (generated_types.contains(name)) continue;
+        try generated_types.put(name, {});
+
+        // Try to find in current WinMD
+        const current_ctx = ctx;
+        const type_row_opt = if (zig_std.mem.indexOfScalar(u8, name, '.') != null)
+            resolver.findTypeDefRowByFullName(rctx, name) catch blk: {
+                const dot = zig_std.mem.lastIndexOfScalar(u8, name, '.') orelse name.len - 1;
+                break :blk emit.findTypeDefRow(ctx, name[dot+1..]) catch null;
+            }
+        else
+            emit.findTypeDefRow(ctx, name) catch null;
+
+        if (type_row_opt == null) continue;
+
+        const type_row = type_row_opt.?;
+        const cat = try emit.identifyTypeCategory(current_ctx, type_row);
         switch (cat) {
-            .interface => try emit.emitInterface(allocator, writer, ctx, winmd_path.?, name),
-            .enum_type => try emit.emitEnum(allocator, writer, ctx, type_row),
-            .struct_type => try emit.emitStruct(allocator, writer, ctx, type_row),
-            else => {
-                const resolved = try resolver.resolveDefaultInterfaceNameForRuntimeClassAlloc(rctx, allocator, name);
-                defer allocator.free(resolved);
-                try emit.emitInterface(allocator, writer, ctx, winmd_path.?, resolved);
+            .interface => try emit.emitInterface(allocator, writer, current_ctx, winmd_path.?, name),
+            .enum_type => try emit.emitEnum(allocator, writer, current_ctx, type_row),
+            .struct_type => try emit.emitStruct(allocator, writer, current_ctx, type_row),
+            .delegate => try emit.emitDelegate(allocator, writer, current_ctx, type_row),
+            .class, .other => {
+                // If it's a class with name "Apis" or ends with "Apis", it's likely a Win32 standalone function container
+                if (zig_std.mem.endsWith(u8, name, "Apis")) {
+                    try emit.emitFunctions(allocator, writer, current_ctx, type_row);
+                } else if (cat == .class) {
+                    try emit.emitClass(allocator, writer, current_ctx, type_row);
+                } else {
+                    const resolved = resolver.resolveDefaultInterfaceNameForRuntimeClassAlloc(rctx, allocator, name) catch continue;
+                    defer allocator.free(resolved);
+                    try emit.emitInterface(allocator, writer, current_ctx, winmd_path.?, resolved);
+                }
             },
+        }
+
+        // Add newly discovered dependencies to the list (unless --no-deps)
+        if (!no_deps) {
+            var dit = dependencies.keyIterator();
+            while (dit.next()) |d| {
+                if (!generated_types.contains(d.*)) {
+                    // Check if already in queue
+                    var in_queue = false;
+                    for (to_generate.items[head+1..]) |q| {
+                        if (zig_std.mem.eql(u8, q, d.*)) { in_queue = true; break; }
+                    }
+                    if (!in_queue) try to_generate.append(allocator, try allocator.dupe(u8, d.*));
+                }
+            }
         }
     }
 

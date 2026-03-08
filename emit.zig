@@ -8,6 +8,38 @@ const resolver = @import("resolver.zig");
 pub const Context = struct {
     table_info: tables.Info,
     heaps: streams.Heaps,
+    dependencies: ?*std.StringHashMap(void) = null,
+    allocator: ?std.mem.Allocator = null,
+
+    pub fn registerDependency(self: Context, allocator: std.mem.Allocator, name: []const u8) !void {
+        if (self.dependencies) |deps| {
+            var stripped = name;
+            while (stripped.len > 0) {
+                if (stripped[0] == '*' or stripped[0] == '?' or stripped[0] == '[') {
+                    if (std.mem.indexOfScalar(u8, stripped, ']')) |idx| {
+                        stripped = stripped[idx + 1 ..];
+                    } else {
+                        stripped = stripped[1..];
+                    }
+                } else break;
+            }
+            if (stripped.len == 0) return;
+            if (isBuiltinType(stripped)) return;
+            if (isKnownStruct(stripped)) return;
+            if (std.mem.eql(u8, stripped, "EventRegistrationToken")) return;
+            if (std.mem.eql(u8, stripped, "IInspectable")) return;
+            if (std.mem.eql(u8, stripped, "IUnknown")) return;
+
+            const dot = std.mem.lastIndexOfScalar(u8, stripped, '.');
+            const first_char = if (dot) |d| stripped[d + 1] else stripped[0];
+
+            if (first_char >= 'A' and first_char <= 'Z') {
+                if (!deps.contains(stripped)) {
+                    try deps.put(try allocator.dupe(u8, stripped), {});
+                }
+            }
+        }
+    }
 };
 
 pub const MethodMeta = struct {
@@ -25,26 +57,67 @@ pub const MethodRange = struct {
     end_exclusive: u32,
 };
 
-pub const TypeCategory = enum { interface, enum_type, struct_type, class, other };
+pub const TypeCategory = enum { interface, enum_type, struct_type, class, delegate, other };
 
 pub fn writePrologue(writer: anytype) !void {
     try writer.writeAll(
         \\//! WinUI 3 COM interface definitions for Zig.
         \\//! GENERATED CODE - DO NOT EDIT.
         \\const std = @import("std");
-        \\const GUID = std.os.windows.GUID;
-        \\const HRESULT = std.os.windows.HRESULT;
-        \\const HSTRING = ?*anyopaque;
-        \\const EventRegistrationToken = i64;
+        \\pub const GUID = extern struct {
+        \\    data1: u32,
+        \\    data2: u16,
+        \\    data3: u16,
+        \\    data4: [8]u8,
+        \\
+        \\    pub fn equals(self: GUID, other: GUID) bool {
+        \\        return self.data1 == other.data1 and self.data2 == other.data2 and self.data3 == other.data3 and std.mem.eql(u8, &self.data4, &other.data4);
+        \\    }
+        \\};
+        \\pub const HRESULT = i32;
+        \\pub const BOOL = i32;
+        \\pub const FARPROC = ?*anyopaque;
+        \\pub const HSTRING = ?*anyopaque;
+        \\pub const HANDLE = extern struct {
+        \\    Value: isize,
+        \\    pub fn is_invalid(self: @This()) bool { return self.Value == 0 or self.Value == -1; }
+        \\};
+        \\pub const HWND = extern struct {
+        \\    Value: isize,
+        \\    pub fn is_invalid(self: @This()) bool { return self.Value == 0 or self.Value == -1; }
+        \\};
+        \\pub const HINSTANCE = extern struct {
+        \\    Value: isize,
+        \\    pub fn is_invalid(self: @This()) bool { return self.Value == 0 or self.Value == -1; }
+        \\};
+        \\pub const HMODULE = extern struct {
+        \\    Value: isize,
+        \\    pub fn is_invalid(self: @This()) bool { return self.Value == 0 or self.Value == -1; }
+        \\};
+        \\pub const WPARAM = extern struct { Value: usize };
+        \\pub const LPARAM = extern struct { Value: isize };
+        \\pub const LPCWSTR = [*]const u16;
+        \\pub const LPWSTR = [*]u16;
+        \\pub const POINT = extern struct {
+        \\    x: i32,
+        \\    y: i32,
+        \\};
+        \\pub const RECT = extern struct {
+        \\    left: i32,
+        \\    top: i32,
+        \\    right: i32,
+        \\    bottom: i32,
+        \\};
+        \\pub const EventRegistrationToken = i64;
         \\
         \\pub const VtblPlaceholder = ?*const anyopaque;
         \\
-        \\pub const IID_RoutedEventHandler = GUID{ .Data1 = 0xaf8dae19, .Data2 = 0x0794, .Data3 = 0x5695, .Data4 = .{ 0x96, 0x8a, 0x07, 0x33, 0x3f, 0x92, 0x32, 0xe0 } };
-        \\pub const IID_SizeChangedEventHandler = GUID{ .Data1 = 0x8d7b1a58, .Data2 = 0x14c6, .Data3 = 0x51c9, .Data4 = .{ 0x89, 0x2c, 0x9f, 0xcc, 0xe3, 0x68, 0xe7, 0x7d } };
-        \\pub const IID_TypedEventHandler_TabCloseRequested = GUID{ .Data1 = 0x7093974b, .Data2 = 0x0900, .Data3 = 0x52ae, .Data4 = .{ 0xaf, 0xd8, 0x70, 0xe5, 0x62, 0x3f, 0x45, 0x95 } };
-        \\pub const IID_TypedEventHandler_AddTabButtonClick = GUID{ .Data1 = 0x13df6907, .Data2 = 0xbbb4, .Data3 = 0x5f16, .Data4 = .{ 0xbe, 0xac, 0x29, 0x38, 0xc1, 0x5e, 0x1d, 0x85 } };
-        \\pub const IID_SelectionChangedEventHandler = GUID{ .Data1 = 0xa232390d, .Data2 = 0x0e34, .Data3 = 0x595e, .Data4 = .{ 0x89, 0x31, 0xfa, 0x92, 0x8a, 0x99, 0x09, 0xf4 } };
-        \\pub const IID_TypedEventHandler_WindowClosed = GUID{ .Data1 = 0x2a954d28, .Data2 = 0x7f8b, .Data3 = 0x5479, .Data4 = .{ 0x8c, 0xe9, 0x90, 0x04, 0x24, 0xa0, 0x40, 0x9f } };
+        \\pub const IID_RoutedEventHandler = GUID{ .data1 = 0xaf8dae19, .data2 = 0x0794, .data3 = 0x5695, .data4 = .{ 0x96, 0x8a, 0x07, 0x33, 0x3f, 0x92, 0x32, 0xe0 } };
+        \\pub const IID_SizeChangedEventHandler = GUID{ .data1 = 0x8d7b1a58, .data2 = 0x14c6, .data3 = 0x51c9, .data4 = .{ 0x89, 0x2c, 0x9f, 0xcc, 0xe3, 0x68, 0xe7, 0x7d } };
+        \\pub const IID_TypedEventHandler_TabCloseRequested = GUID{ .data1 = 0x7093974b, .data2 = 0x0900, .data3 = 0x52ae, .data4 = .{ 0xaf, 0xd8, 0x70, 0xe5, 0x62, 0x3f, 0x45, 0x95 } };
+        \\pub const IID_TypedEventHandler_AddTabButtonClick = GUID{ .data1 = 0x13df6907, .data2 = 0xbbb4, .data3 = 0x5f16, .data4 = .{ 0xbe, 0xac, 0x29, 0x38, 0xc1, 0x5e, 0x1d, 0x85 } };
+        \\pub const IID_SelectionChangedEventHandler = GUID{ .data1 = 0xa232390d, .data2 = 0x0e34, .data3 = 0x595e, .data4 = .{ 0x89, 0x31, 0xfa, 0x92, 0x8a, 0x99, 0x09, 0xf4 } };
+        \\pub const IID_TypedEventHandler_WindowClosed = GUID{ .data1 = 0x2a954d28, .data2 = 0x7f8b, .data3 = 0x5479, .data4 = .{ 0x8c, 0xe9, 0x90, 0x04, 0x24, 0xa0, 0x40, 0x9f } };
         \\
         \\pub fn comRelease(self: anytype) void {
         \\    const obj: *IUnknown = @ptrCast(@alignCast(self));
@@ -64,7 +137,7 @@ pub fn writePrologue(writer: anytype) !void {
         \\}
         \\
         \\pub const IUnknown = extern struct {
-        \\    pub const IID = GUID{ .Data1 = 0x00000000, .Data2 = 0x0000, .Data3 = 0x0000, .Data4 = .{ 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46 } };
+        \\    pub const IID = GUID{ .data1 = 0x00000000, .data2 = 0x0000, .data3 = 0x0000, .data4 = .{ 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46 } };
         \\    lpVtbl: *const VTable,
         \\    pub const VTable = extern struct {
         \\        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,
@@ -76,7 +149,7 @@ pub fn writePrologue(writer: anytype) !void {
         \\};
         \\
         \\pub const IInspectable = extern struct {
-        \\    pub const IID = GUID{ .Data1 = 0xAFDBDF05, .Data2 = 0x2D12, .Data3 = 0x4D31, .Data4 = .{ 0x84, 0x1F, 0x72, 0x71, 0x50, 0x51, 0x46, 0x46 } };
+        \\    pub const IID = GUID{ .data1 = 0xAFDBDF05, .data2 = 0x2D12, .data3 = 0x4D31, .data4 = .{ 0x84, 0x1F, 0x72, 0x71, 0x50, 0x51, 0x46, 0x46 } };
         \\    lpVtbl: *const VTable,
         \\    pub const VTable = extern struct {
         \\        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,
@@ -90,7 +163,6 @@ pub fn writePrologue(writer: anytype) !void {
         \\    pub fn queryInterface(self: *@This(), comptime T: type) !*T { return comQueryInterface(self, T); }
         \\};
         \\
-        \\
     );
 }
 
@@ -101,9 +173,11 @@ pub fn emitInterface(
     _: []const u8,
     interface_name: []const u8,
 ) !void {
-    const type_row = findTypeDefRow(ctx, interface_name) catch return;
+    const type_row = try findTypeDefRow(ctx, interface_name);
     const type_def = try ctx.table_info.readTypeDef(type_row);
     const type_name = try ctx.heaps.getString(type_def.type_name);
+    const ns = try ctx.heaps.getString(type_def.type_namespace);
+    const is_winrt_iface = !std.mem.startsWith(u8, ns, "Windows.Win32.") and !std.mem.startsWith(u8, ns, "Windows.Wdk.");
 
     const guid = extractGuid(ctx, type_row) catch std.mem.zeroes([16]u8);
 
@@ -123,8 +197,12 @@ pub fn emitInterface(
     }
 
     var seen_method_names = std.StringHashMap(u32).init(allocator);
-    defer seen_method_names.deinit();
-    
+    defer {
+        var it = seen_method_names.keyIterator();
+        while (it.next()) |k| allocator.free(k.*);
+        seen_method_names.deinit();
+    }
+
     var seen_norm_names = std.StringHashMap(u32).init(allocator);
     defer {
         var it = seen_norm_names.keyIterator();
@@ -138,12 +216,26 @@ pub fn emitInterface(
         const name = try ctx.heaps.getString(m.name);
         const sig_blob = try ctx.heaps.getBlob(m.signature);
         var sig_c = SigCursor{ .data = sig_blob };
-        _ = sig_c.readByte(); 
+        _ = sig_c.readByte();
         const param_count = sig_c.readCompressedUInt() orelse 0;
-        const ret_type_opt = try decodeSigType(allocator, ctx, &sig_c, true);
+        const ret_type_opt = try decodeSigType(allocator, ctx, &sig_c, is_winrt_iface);
         const ret_type_raw = ret_type_opt orelse "void";
         defer if (ret_type_opt != null) allocator.free(ret_type_raw);
 
+        // Collect actual parameter names from metadata
+        var param_names_meta = try collectParamNames(allocator, ctx, i);
+        defer param_names_meta.deinit(allocator);
+        var all_param_names = std.ArrayList([]const u8).empty;
+        defer {
+            for (all_param_names.items) |n| allocator.free(n);
+            all_param_names.deinit(allocator);
+        }
+        for (param_names_meta.items) |pn| {
+            try all_param_names.append(allocator, try sanitizeIdentifier(allocator, pn));
+        }
+        while (all_param_names.items.len < param_count) {
+            try all_param_names.append(allocator, try std.fmt.allocPrint(allocator, "p{d}", .{all_param_names.items.len}));
+        }
 
         var vtbl_params = std.ArrayList(u8).empty;
         defer vtbl_params.deinit(allocator);
@@ -185,7 +277,7 @@ pub fn emitInterface(
         var p_idx: u32 = 0;
         while (p_idx < param_count) : (p_idx += 1) {
             const is_byref = (sig_c.pos < sig_c.data.len and sig_c.data[sig_c.pos] == 0x10);
-            const p_type_opt = try decodeSigType(allocator, ctx, &sig_c, true);
+            const p_type_opt = try decodeSigType(allocator, ctx, &sig_c, is_winrt_iface);
             const p_type_raw = p_type_opt orelse "?*anyopaque";
             if (is_byref) try byref_indices.append(allocator, p_idx);
             defer if (p_type_opt != null) allocator.free(p_type_raw);
@@ -206,7 +298,7 @@ pub fn emitInterface(
                 try allocator.dupe(u8, p_type_raw) // Color, GridLength, EventRegistrationToken pass by value
             else
                 try allocator.dupe(u8, "?*anyopaque"); // interface names -> ?*anyopaque
-            
+
             // No concessions needed - proper type resolution handles ABI mapping
             defer allocator.free(p_type_vtbl);
 
@@ -214,6 +306,8 @@ pub fn emitInterface(
             try vtbl_params.appendSlice(allocator, p_type_vtbl);
             try param_vtbl_types.append(allocator, try allocator.dupe(u8, p_type_vtbl));
             try param_logical_types.append(allocator, try allocator.dupe(u8, p_type_raw));
+
+            const p_name = all_param_names.items[p_idx];
 
             if (is_getter) {
                 // Use logical type from decoded signature for return type
@@ -230,12 +324,10 @@ pub fn emitInterface(
                     wrapper_ret = try allocator.dupe(u8, p_type_vtbl);
                 }
             } else {
-                const p_name = try std.fmt.allocPrint(allocator, "p{d}", .{p_idx});
-                defer allocator.free(p_name);
                 try wrapper_params.appendSlice(allocator, ", ");
                 try wrapper_params.appendSlice(allocator, p_name);
                 try wrapper_params.appendSlice(allocator, ": ");
-                
+
                 // Wrappers accept anytype for non-null pointers (lax casting),
                 // but use concrete type for nullable pointers (callers may pass null).
                 if (std.mem.eql(u8, p_type_vtbl, "HSTRING")) {
@@ -262,18 +354,21 @@ pub fn emitInterface(
 
         // WinRT managed convention: non-void return type in .winmd → synthesize ABI out-param
         // Applies to getters (get_*), event subscriptions (add_*), and methods with non-void returns
-        if (std.mem.eql(u8, ret_type_raw, "SZARRAY")) {
+        if (is_winrt_iface and std.mem.eql(u8, ret_type_raw, "SZARRAY")) {
             // WinRT array return: becomes [out] uint32 count, [out] T* definitions at ABI
             const synth_base: u32 = @intCast(param_vtbl_types.items.len);
             try vtbl_params.appendSlice(allocator, ", *u32");
             try param_vtbl_types.append(allocator, try allocator.dupe(u8, "*u32"));
             try param_logical_types.append(allocator, try allocator.dupe(u8, "*u32"));
             try byref_indices.append(allocator, synth_base);
+            try all_param_names.append(allocator, try allocator.dupe(u8, "count"));
+
             try vtbl_params.appendSlice(allocator, ", *?*anyopaque");
             try param_vtbl_types.append(allocator, try allocator.dupe(u8, "*?*anyopaque"));
             try param_logical_types.append(allocator, try allocator.dupe(u8, "*?*anyopaque"));
             try byref_indices.append(allocator, synth_base + 1);
-        } else if (!std.mem.eql(u8, ret_type_raw, "void")) {
+            try all_param_names.append(allocator, try allocator.dupe(u8, "definitions"));
+        } else if (is_winrt_iface and !std.mem.eql(u8, ret_type_raw, "void")) {
             const is_iface_ret = isInterfaceType(ret_type_raw);
             const synth_param_idx: u32 = @intCast(param_vtbl_types.items.len);
 
@@ -295,6 +390,7 @@ pub fn emitInterface(
                 try param_logical_types.append(allocator, try std.fmt.allocPrint(allocator, "*{s}", .{ret_type_raw}));
             }
             try byref_indices.append(allocator, synth_param_idx);
+            try all_param_names.append(allocator, try allocator.dupe(u8, if (is_getter) "out" else "value"));
 
             // For getters, set wrapper_ret based on the return type
             if (is_getter) {
@@ -314,23 +410,65 @@ pub fn emitInterface(
                     wrapper_ret = try allocator.dupe(u8, "?*anyopaque");
                 }
             }
+        } else if (!is_winrt_iface) {
+            // Win32 COM: metadata return type is actual return type (usually HRESULT, but not always)
+            allocator.free(wrapper_ret);
+            wrapper_ret = try allocator.dupe(u8, ret_type_raw);
         }
 
-        const prev_count = seen_method_names.get(name) orelse 0;
-        var unique = if (prev_count > 0) try std.fmt.allocPrint(allocator, "{s}_{d}", .{ name, prev_count }) else try allocator.dupe(u8, name);
+        var raw_name_seed = try allocator.dupe(u8, name);
+        defer allocator.free(raw_name_seed);
+        var norm_seed = try allocator.dupe(u8, name);
+        defer allocator.free(norm_seed);
+        var preserve_norm_case = false;
+
+        if (is_winrt_iface) {
+            if (std.mem.startsWith(u8, name, "get_")) {
+                const suffix = name["get_".len..];
+                allocator.free(raw_name_seed);
+                raw_name_seed = try allocator.dupe(u8, suffix);
+                allocator.free(norm_seed);
+                norm_seed = try allocator.dupe(u8, suffix);
+                preserve_norm_case = true;
+            } else if (std.mem.startsWith(u8, name, "put_")) {
+                const suffix = name["put_".len..];
+                allocator.free(raw_name_seed);
+                raw_name_seed = try std.fmt.allocPrint(allocator, "Set{s}", .{suffix});
+                allocator.free(norm_seed);
+                norm_seed = try allocator.dupe(u8, raw_name_seed);
+                preserve_norm_case = true;
+            } else if (std.mem.startsWith(u8, name, "add_")) {
+                const suffix = name["add_".len..];
+                allocator.free(raw_name_seed);
+                raw_name_seed = try allocator.dupe(u8, suffix);
+                allocator.free(norm_seed);
+                norm_seed = try std.fmt.allocPrint(allocator, "Add{s}", .{suffix});
+                preserve_norm_case = true;
+            } else if (std.mem.startsWith(u8, name, "remove_")) {
+                const suffix = name["remove_".len..];
+                allocator.free(raw_name_seed);
+                raw_name_seed = try std.fmt.allocPrint(allocator, "Remove{s}", .{suffix});
+                allocator.free(norm_seed);
+                norm_seed = try allocator.dupe(u8, raw_name_seed);
+                preserve_norm_case = true;
+            }
+        }
+
+        const prev_count = seen_method_names.get(raw_name_seed) orelse 0;
+        var unique = if (prev_count > 0) try std.fmt.allocPrint(allocator, "{s}_{d}", .{ raw_name_seed, prev_count }) else try allocator.dupe(u8, raw_name_seed);
         // Keep IXamlMetadataProvider overload naming compatible with existing call-sites.
         if (std.mem.eql(u8, type_name, "IXamlMetadataProvider") and std.mem.eql(u8, name, "GetXamlType") and prev_count > 0) {
             allocator.free(unique);
             unique = try allocator.dupe(u8, "GetXamlType_2");
         }
-        try seen_method_names.put(name, prev_count + 1);
-        
-        var norm_name = if (std.mem.indexOfScalar(u8, name, '_')) |underscore_idx| blk: {
-            const prefix = name[0..underscore_idx];
-            const suffix = name[underscore_idx+1..];
+        try seen_method_names.put(try allocator.dupe(u8, raw_name_seed), prev_count + 1);
+
+        var norm_name = if (std.mem.indexOfScalar(u8, norm_seed, '_')) |underscore_idx| blk: {
+            const prefix = norm_seed[0..underscore_idx];
+            const suffix = norm_seed[underscore_idx + 1 ..];
             break :blk try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, suffix });
-        } else try allocator.dupe(u8, name);
-        if (norm_name.len > 0) norm_name[0] = std.ascii.toLower(norm_name[0]);
+        } else try allocator.dupe(u8, norm_seed);
+        if (!preserve_norm_case and norm_name.len > 0) norm_name[0] = std.ascii.toLower(norm_name[0]);
 
         const norm_prev = seen_norm_names.get(norm_name) orelse 0;
         if (norm_prev > 0) {
@@ -340,7 +478,8 @@ pub fn emitInterface(
         }
         try seen_norm_names.put(try allocator.dupe(u8, norm_name), norm_prev + 1);
 
-        const vtbl_sig = try std.fmt.allocPrint(allocator, "*const fn ({s}) callconv(.winapi) HRESULT", .{vtbl_params.items});
+        const vtbl_ret = if (is_winrt_iface) "HRESULT" else wrapper_ret;
+        const vtbl_sig = try std.fmt.allocPrint(allocator, "*const fn ({s}) callconv(.winapi) {s}", .{ vtbl_params.items, vtbl_ret });
         var wrapper_sig: []const u8 = undefined;
         var wrapper_call: []const u8 = undefined;
         var raw_wrapper_sig: []const u8 = undefined;
@@ -435,7 +574,10 @@ pub fn emitInterface(
                 while (pi < actual_param_count) : (pi += 1) {
                     var is_out = false;
                     for (byref_indices.items) |bi| {
-                        if (bi == pi) { is_out = true; break; }
+                        if (bi == pi) {
+                            is_out = true;
+                            break;
+                        }
                     }
                     const pvt = param_vtbl_types.items[pi];
                     if (is_out) {
@@ -530,31 +672,38 @@ pub fn emitInterface(
                     }
                     const fwd_args = if (out_fwd_args.items.len > 2) out_fwd_args.items[2..] else "";
                     raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}({s});", .{ norm_name, fwd_args });
-                } else if (byref_count == 2 and std.mem.eql(u8, name, "GetXmlnsDefinitions")) {
-                    // GetXmlnsDefinitions: 2 out-params → named struct return
-                    wrapper_sig = try std.fmt.allocPrint(
-                        allocator,
-                        "pub fn {s}(self: *@This()) !struct {{ count: u32, definitions: ?*anyopaque }}",
-                        .{norm_name},
-                    );
-                    wrapper_call = try std.fmt.allocPrint(
-                        allocator,
-                        "var count: u32 = 0; var definitions: ?*anyopaque = null; try hrCheck(self.lpVtbl.{s}(self, &count, &definitions)); return .{{ .count = count, .definitions = definitions }};",
-                        .{unique},
-                    );
-                    raw_wrapper_sig = try std.fmt.allocPrint(
-                        allocator,
-                        "pub fn {s}(self: *@This()) !struct {{ count: u32, definitions: ?*anyopaque }}",
-                        .{unique},
-                    );
-                    raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}();", .{norm_name});
                 } else {
-                    // Multiple out-params: return a struct (fallback to void for now)
-                    wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !void", .{ norm_name, wrapper_params.items });
-                    wrapper_call = try std.fmt.allocPrint(allocator, "try hrCheck(self.lpVtbl.{s}({s}));", .{ unique, call_args.items });
-                    raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !void", .{ unique, wrapper_params.items });
-                    const fwd_args = if (wrapper_fwd_args.items.len > 2) wrapper_fwd_args.items[2..] else "";
-                    raw_wrapper_call = try std.fmt.allocPrint(allocator, "try self.{s}({s});", .{ norm_name, fwd_args });
+                    // Multiple out-params: return a struct
+                    var ret_struct_sig = std.ArrayList(u8).empty;
+                    defer ret_struct_sig.deinit(allocator);
+                    try ret_struct_sig.appendSlice(allocator, "struct { ");
+
+                    var ret_val_init = std.ArrayList(u8).empty;
+                    defer ret_val_init.deinit(allocator);
+                    try ret_val_init.appendSlice(allocator, ".{ ");
+
+                    var bi: u32 = 0;
+                    while (bi < byref_count) : (bi += 1) {
+                        const param_index = byref_indices.items[bi];
+                        const p_name = all_param_names.items[param_index];
+                        const pvt = param_vtbl_types.items[param_index];
+                        const inner_type = if (std.mem.startsWith(u8, pvt, "*")) pvt[1..] else pvt;
+
+                        if (bi > 0) {
+                            try ret_struct_sig.appendSlice(allocator, ", ");
+                            try ret_val_init.appendSlice(allocator, ", ");
+                        }
+                        try ret_struct_sig.writer(allocator).print("{s}: {s}", .{ p_name, inner_type });
+                        try ret_val_init.writer(allocator).print(".{s} = out{d}", .{ p_name, bi });
+                    }
+                    try ret_struct_sig.appendSlice(allocator, " }");
+                    try ret_val_init.appendSlice(allocator, " }");
+
+                    wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !{s}", .{ norm_name, out_wrapper_params.items, ret_struct_sig.items });
+                    wrapper_call = try std.fmt.allocPrint(allocator, "{s}try hrCheck(self.lpVtbl.{s}({s})); return {s};", .{ out_locals.items, unique, out_call_args.items, ret_val_init.items });
+                    raw_wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !{s}", .{ unique, out_wrapper_params.items, ret_struct_sig.items });
+                    const fwd_args = if (out_fwd_args.items.len > 2) out_fwd_args.items[2..] else "";
+                    raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}({s});", .{ norm_name, fwd_args });
                 }
             } else {
                 wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !void", .{ norm_name, wrapper_params.items });
@@ -633,7 +782,7 @@ pub fn emitInterface(
     }
 
     try writer.print("pub const {s} = extern struct {{\n", .{type_name});
-    try writer.print("    pub const IID = GUID{{ .Data1 = 0x{x:0>8}, .Data2 = 0x{x:0>4}, .Data3 = 0x{x:0>4}, .Data4 = .{{ 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2} }} }};\n", .{ std.mem.readInt(u32, guid[0..4], .little), std.mem.readInt(u16, guid[4..6], .little), std.mem.readInt(u16, guid[6..8], .little), guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15] });
+    try writer.print("    pub const IID = GUID{{ .data1 = 0x{x:0>8}, .data2 = 0x{x:0>4}, .data3 = 0x{x:0>4}, .data4 = .{{ 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2} }} }};\n", .{ std.mem.readInt(u32, guid[0..4], .little), std.mem.readInt(u16, guid[4..6], .little), std.mem.readInt(u16, guid[6..8], .little), guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15] });
     try writer.writeAll("    lpVtbl: *const VTable,\n    pub const VTable = extern struct {\n        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,\n        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,\n        Release: *const fn (*anyopaque) callconv(.winapi) u32,\n        GetIids: VtblPlaceholder,\n        GetRuntimeClassName: VtblPlaceholder,\n        GetTrustLevel: VtblPlaceholder,\n");
     // Emit inherited parent methods (COM flat vtable: parent slots before child slots)
     for (parent_methods.items) |m| try writer.print("        {s}: {s},\n", .{ m.raw_name, m.vtbl_sig });
@@ -648,9 +797,56 @@ pub fn emitInterface(
         try writer.writeAll("    pub const Color = extern struct { a: u8, r: u8, g: u8, b: u8 };\n");
     }
     try writer.writeAll("    pub fn release(self: *@This()) void { comRelease(self); }\n    pub fn queryInterface(self: *@This(), comptime T: type) !*T { return comQueryInterface(self, T); }\n");
+    var emitted_required_forwarders = std.StringHashMap(void).init(allocator);
+    defer {
+        var it = emitted_required_forwarders.keyIterator();
+        while (it.next()) |k| allocator.free(k.*);
+        emitted_required_forwarders.deinit();
+    }
+    for (required_ifaces.items) |iface_name| {
+        const iface_row = findTypeDefRow(ctx, iface_name) catch continue;
+        const iface_range = methodRange(ctx.table_info, iface_row) catch continue;
+        var iface_mi = iface_range.start;
+        while (iface_mi < iface_range.end_exclusive) : (iface_mi += 1) {
+            const iface_m = try ctx.table_info.readMethodDef(iface_mi);
+            const iface_method_name = try ctx.heaps.getString(iface_m.name);
+            const iface_sig_blob = try ctx.heaps.getBlob(iface_m.signature);
+            var iface_sig_c = SigCursor{ .data = iface_sig_blob };
+            _ = iface_sig_c.readByte();
+            const iface_param_count = iface_sig_c.readCompressedUInt() orelse continue;
+            if (iface_param_count != 0) continue;
+
+            var forward_name = try allocator.dupe(u8, iface_method_name);
+            defer allocator.free(forward_name);
+            if (std.mem.startsWith(u8, iface_method_name, "get_")) {
+                allocator.free(forward_name);
+                forward_name = try allocator.dupe(u8, iface_method_name["get_".len..]);
+            } else if (std.mem.startsWith(u8, iface_method_name, "put_")) {
+                allocator.free(forward_name);
+                forward_name = try std.fmt.allocPrint(allocator, "Set{s}", .{iface_method_name["put_".len..]});
+            } else if (std.mem.startsWith(u8, iface_method_name, "remove_")) {
+                allocator.free(forward_name);
+                forward_name = try std.fmt.allocPrint(allocator, "Remove{s}", .{iface_method_name["remove_".len..]});
+            } else if (std.mem.startsWith(u8, iface_method_name, "add_")) {
+                allocator.free(forward_name);
+                forward_name = try std.fmt.allocPrint(allocator, "Add{s}", .{iface_method_name["add_".len..]});
+            }
+
+            if (emitted_required_forwarders.contains(forward_name)) continue;
+            try emitted_required_forwarders.put(try allocator.dupe(u8, forward_name), {});
+            try writer.print(
+                "    pub fn {s}(self: *@This()) !void {{ const base = try self.queryInterface({s}); _ = try base.{s}(); }}\n",
+                .{ forward_name, iface_name, forward_name },
+            );
+        }
+    }
     for (methods.items) |m| {
         try writer.print("    {s} {{ {s} }}\n", .{ m.wrapper_sig, m.wrapper_call });
         if (!std.mem.eql(u8, m.norm_name, m.raw_name)) try writer.print("    {s} {{ {s} }}\n", .{ m.raw_wrapper_sig, m.raw_wrapper_call });
+    }
+    const cat = identifyTypeCategory(ctx, type_row) catch .other;
+    if (cat == .delegate) {
+        try writer.writeAll("    pub fn new() !*@This() { return error.NotImplemented; }\n");
     }
     try writer.writeAll("};\n\n");
 }
@@ -801,7 +997,7 @@ pub fn emitStruct(allocator: std.mem.Allocator, writer: anytype, ctx: Context, t
         const name = try ctx.heaps.getString(f.name);
         const sig_blob = try ctx.heaps.getBlob(f.signature);
         var sig_c = SigCursor{ .data = sig_blob };
-        _ = sig_c.readByte(); 
+        _ = sig_c.readByte();
         const ty_opt = try decodeSigType(allocator, ctx, &sig_c, false);
         const ty = ty_opt orelse "?*anyopaque";
         defer if (ty_opt != null) allocator.free(ty);
@@ -811,9 +1007,81 @@ pub fn emitStruct(allocator: std.mem.Allocator, writer: anytype, ctx: Context, t
 }
 
 fn isKnownStruct(name: []const u8) bool {
-    const structs = [_][]const u8{ "GridLength", "Color" };
+    const structs = [_][]const u8{ "GridLength", "Color", "Point", "Size", "Rect", "Thickness", "CornerRadius" };
     for (structs) |s| if (std.mem.eql(u8, name, s)) return true;
     return false;
+}
+
+fn sanitizeIdentifier(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
+    const keywords = [_][]const u8{ "addrspace", "align", "and", "asm", "async", "await", "break", "catch", "comptime", "const", "continue", "defer", "else", "enum", "errdefer", "error", "export", "extern", "fn", "for", "if", "inline", "noalias", "noinline", "nosuspend", "opaque", "or", "orelse", "packed", "anyframe", "pub", "resume", "return", "linksection", "struct", "suspend", "switch", "test", "threadlocal", "try", "type", "union", "unreachable", "usingnamespace", "var", "volatile", "while" };
+    for (keywords) |kw| {
+        if (std.mem.eql(u8, name, kw)) {
+            return try std.fmt.allocPrint(allocator, "@\"{s}\"", .{name});
+        }
+    }
+    return try allocator.dupe(u8, name);
+}
+
+fn paramRange(info: tables.Info, method_row: u32) !MethodRange {
+    const md = try info.readMethodDef(method_row);
+    return .{ .start = md.param_list, .end_exclusive = if (method_row < info.getTable(.MethodDef).row_count) (try info.readMethodDef(method_row + 1)).param_list else info.getTable(.Param).row_count + 1 };
+}
+
+fn collectParamNames(allocator: std.mem.Allocator, ctx: Context, method_row: u32) !std.ArrayList([]const u8) {
+    var result = std.ArrayList([]const u8).empty;
+    const range = try paramRange(ctx.table_info, method_row);
+    var pi = range.start;
+    while (pi < range.end_exclusive) : (pi += 1) {
+        const p = try ctx.table_info.readParam(pi);
+        if (p.sequence == 0) continue; // Skip return type
+        try result.append(allocator, try ctx.heaps.getString(p.name));
+    }
+    return result;
+}
+
+fn customAttributeTypeName(ctx: Context, ca_type: u32) !?[]const u8 {
+    const ty = coded.decodeCustomAttributeType(ca_type) catch return null;
+    if (ty.table != .MemberRef) return null;
+    const mr = try ctx.table_info.readMemberRef(ty.row);
+    const parent = coded.decodeMemberRefParent(mr.class) catch return null;
+    return switch (parent.table) {
+        .TypeRef => blk: {
+            const tr = try ctx.table_info.readTypeRef(parent.row);
+            break :blk try ctx.heaps.getString(tr.type_name);
+        },
+        .TypeDef => blk: {
+            const td = try ctx.table_info.readTypeDef(parent.row);
+            break :blk try ctx.heaps.getString(td.type_name);
+        },
+        else => null,
+    };
+}
+
+fn decodeCustomAttributeString(blob: []const u8) ?[]const u8 {
+    if (blob.len < 3) return null;
+    if (blob[0] != 0x01 or blob[1] != 0x00) return null;
+    var c = SigCursor{ .data = blob[2..] };
+    const len = c.readCompressedUInt() orelse return null;
+    if (len == 0xFF) return null;
+    if (c.pos + len > c.data.len) return null;
+    return c.data[c.pos .. c.pos + len];
+}
+
+fn registerAssociatedEnumDependencies(allocator: std.mem.Allocator, ctx: Context, method_row: u32) !void {
+    if (ctx.dependencies == null) return;
+    const range = try paramRange(ctx.table_info, method_row);
+    const ca_table = ctx.table_info.getTable(.CustomAttribute);
+    var ca_row: u32 = 1;
+    while (ca_row <= ca_table.row_count) : (ca_row += 1) {
+        const ca = try ctx.table_info.readCustomAttribute(ca_row);
+        const parent = coded.decodeHasCustomAttribute(ca.parent) catch continue;
+        if (parent.table != .Param or parent.row < range.start or parent.row >= range.end_exclusive) continue;
+        const attr_name = try customAttributeTypeName(ctx, ca.ca_type) orelse continue;
+        if (!std.mem.eql(u8, attr_name, "AssociatedEnumAttribute")) continue;
+        const blob = try ctx.heaps.getBlob(ca.value);
+        const enum_name = decodeCustomAttributeString(blob) orelse continue;
+        try ctx.registerDependency(allocator, enum_name);
+    }
 }
 
 /// Returns true if the interface type is importable (defined in generated output or com_native).
@@ -857,7 +1125,7 @@ fn defaultInit(ty: []const u8) []const u8 {
 }
 
 fn isBuiltinType(t: []const u8) bool {
-    const builtins = [_][]const u8{ "void", "bool", "anyopaque", "?*anyopaque", "GUID", "HSTRING", "isize", "usize", "u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "f32", "f64" };
+    const builtins = [_][]const u8{ "void", "bool", "anyopaque", "?*anyopaque", "GUID", "HSTRING", "isize", "usize", "u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "f32", "f64", "HWND", "HANDLE", "HINSTANCE", "HMODULE", "BOOL", "WPARAM", "LPARAM", "LPCWSTR", "LPWSTR", "HRESULT", "POINT", "RECT" };
     for (builtins) |b| if (std.mem.eql(u8, t, b)) return true;
     return false;
 }
@@ -941,6 +1209,30 @@ const SigCursor = struct {
     }
 };
 
+fn resolveTypeDefOrRefFullNameAlloc(allocator: std.mem.Allocator, ctx: Context, tdor: coded.Decoded) !?[]const u8 {
+    return switch (tdor.table) {
+        .TypeDef => blk: {
+            const td = try ctx.table_info.readTypeDef(tdor.row);
+            const ns = try ctx.heaps.getString(td.type_namespace);
+            const name = try ctx.heaps.getString(td.type_name);
+            if (ns.len == 0) break :blk try allocator.dupe(u8, name);
+            break :blk try std.fmt.allocPrint(allocator, "{s}.{s}", .{ ns, name });
+        },
+        .TypeRef => blk: {
+            const tr = try ctx.table_info.readTypeRef(tdor.row);
+            const ns = try ctx.heaps.getString(tr.type_namespace);
+            const name = try ctx.heaps.getString(tr.type_name);
+            if (ns.len == 0) break :blk try allocator.dupe(u8, name);
+            break :blk try std.fmt.allocPrint(allocator, "{s}.{s}", .{ ns, name });
+        },
+        .TypeSpec => blk: {
+            const base = try resolveTypeSpecBaseType(ctx, tdor.row) orelse break :blk null;
+            break :blk try resolveTypeDefOrRefFullNameAlloc(allocator, ctx, base);
+        },
+        else => null,
+    };
+}
+
 fn resolveTypeDefOrRefNameRaw(ctx: Context, tdor: coded.Decoded) !?[]const u8 {
     return switch (tdor.table) {
         .TypeDef => blk: {
@@ -950,6 +1242,10 @@ fn resolveTypeDefOrRefNameRaw(ctx: Context, tdor: coded.Decoded) !?[]const u8 {
         .TypeRef => blk: {
             const tr = try ctx.table_info.readTypeRef(tdor.row);
             break :blk try ctx.heaps.getString(tr.type_name);
+        },
+        .TypeSpec => blk: {
+            const base = try resolveTypeSpecBaseType(ctx, tdor.row) orelse break :blk null;
+            break :blk try resolveTypeDefOrRefNameRaw(ctx, base);
         },
         else => null,
     };
@@ -977,8 +1273,31 @@ fn resolveTypeDefOrRefToRow(ctx: Context, tdor: coded.Decoded) !?u32 {
             }
             return first_name_match;
         },
+        .TypeSpec => {
+            const base = try resolveTypeSpecBaseType(ctx, tdor.row) orelse return null;
+            return try resolveTypeDefOrRefToRow(ctx, base);
+        },
         else => return null,
     }
+}
+
+fn resolveTypeSpecBaseType(ctx: Context, type_spec_row: u32) !?coded.Decoded {
+    const ts = ctx.table_info.readTypeSpec(type_spec_row) catch return null;
+    const blob = try ctx.heaps.getBlob(ts.signature);
+    var c = SigCursor{ .data = blob };
+    const lead = c.readByte() orelse return null;
+    return switch (lead) {
+        0x11, 0x12 => blk: {
+            const tdor_idx = c.readCompressedUInt() orelse return null;
+            break :blk try coded.decodeTypeDefOrRef(tdor_idx);
+        },
+        0x15 => blk: {
+            _ = c.readByte() orelse return null; // CLASS or VALUETYPE
+            const tdor_idx = c.readCompressedUInt() orelse return null;
+            break :blk try coded.decodeTypeDefOrRef(tdor_idx);
+        },
+        else => null,
+    };
 }
 
 /// Collect parent interface method names for COM interfaces by walking the extends chain.
@@ -998,6 +1317,12 @@ fn collectParentMethods(allocator: std.mem.Allocator, ctx: Context, type_row: u3
         if (parent_name == null) break;
         // Stop at IUnknown/IInspectable — these are already in the hardcoded vtable base
         if (std.mem.eql(u8, parent_name.?, "IUnknown") or std.mem.eql(u8, parent_name.?, "IInspectable")) break;
+        if (try resolveTypeDefOrRefFullNameAlloc(allocator, ctx, extends_tdor)) |parent_full| {
+            defer allocator.free(parent_full);
+            try ctx.registerDependency(allocator, parent_full);
+        } else {
+            try ctx.registerDependency(allocator, parent_name.?);
+        }
         const parent_row = resolveTypeDefOrRefToRow(ctx, extends_tdor) catch break;
         if (parent_row == null) break;
         try parent_chain.append(allocator, parent_row.?);
@@ -1038,15 +1363,57 @@ fn collectRequiredInterfaces(allocator: std.mem.Allocator, ctx: Context, type_ro
         const impl = ctx.table_info.readInterfaceImpl(row) catch continue;
         if (impl.class != type_row) continue;
         const iface_tdor = coded.decodeTypeDefOrRef(impl.interface) catch continue;
+        if (iface_tdor.table == .TypeSpec) {
+            const ts = ctx.table_info.readTypeSpec(iface_tdor.row) catch continue;
+            const sig = try ctx.heaps.getBlob(ts.signature);
+            var sig_c = SigCursor{ .data = sig };
+            const parsed = try decodeSigType(allocator, ctx, &sig_c, true);
+            if (parsed) |p| allocator.free(p);
+        }
         const iface_name = resolveTypeDefOrRefNameRaw(ctx, iface_tdor) catch continue;
         if (iface_name) |n| {
             // Strip backtick arity suffix (e.g., "IAsyncOperation`1" -> "IAsyncOperation")
             const backtick = std.mem.indexOfScalar(u8, n, '`');
             const clean = if (backtick) |bt| n[0..bt] else n;
+            if (try resolveTypeDefOrRefFullNameAlloc(allocator, ctx, iface_tdor)) |iface_full| {
+                defer allocator.free(iface_full);
+                try ctx.registerDependency(allocator, iface_full);
+            } else {
+                try ctx.registerDependency(allocator, clean);
+            }
             try result.append(allocator, try allocator.dupe(u8, clean));
         }
     }
     return result;
+}
+
+fn appendUniqueShortName(
+    allocator: std.mem.Allocator,
+    list: *std.ArrayList([]const u8),
+    name: []const u8,
+) !void {
+    const dot = std.mem.lastIndexOfScalar(u8, name, '.') orelse 0;
+    const short = if (dot > 0) name[dot + 1 ..] else name;
+    for (list.items) |existing| {
+        if (std.mem.eql(u8, existing, short)) return;
+    }
+    try list.append(allocator, try allocator.dupe(u8, short));
+}
+
+fn normalizeWinRtMethodName(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
+    if (std.mem.startsWith(u8, name, "get_")) {
+        return allocator.dupe(u8, name["get_".len..]);
+    }
+    if (std.mem.startsWith(u8, name, "put_")) {
+        return std.fmt.allocPrint(allocator, "Set{s}", .{name["put_".len..]});
+    }
+    if (std.mem.startsWith(u8, name, "add_")) {
+        return std.fmt.allocPrint(allocator, "Add{s}", .{name["add_".len..]});
+    }
+    if (std.mem.startsWith(u8, name, "remove_")) {
+        return std.fmt.allocPrint(allocator, "Remove{s}", .{name["remove_".len..]});
+    }
+    return allocator.dupe(u8, name);
 }
 
 fn collectInterfaceMethodsByName(
@@ -1061,9 +1428,26 @@ fn collectInterfaceMethodsByName(
     while (mi < range.end_exclusive) : (mi += 1) {
         const m = try ctx.table_info.readMethodDef(mi);
         const name = try ctx.heaps.getString(m.name);
+
+        // Decode signature to trigger registerDependency for types used in this method
+        const sig_blob = try ctx.heaps.getBlob(m.signature);
+        var sig_c = SigCursor{ .data = sig_blob };
+        _ = sig_c.readByte();
+        const param_count = sig_c.readCompressedUInt() orelse 0;
+        if (decodeSigType(allocator, ctx, &sig_c, true) catch null) |ret_type| {
+            allocator.free(ret_type);
+        }
+        var p_idx: u32 = 0;
+        while (p_idx < param_count) : (p_idx += 1) {
+            _ = (sig_c.pos < sig_c.data.len and sig_c.data[sig_c.pos] == 0x10);
+            if (decodeSigType(allocator, ctx, &sig_c, true) catch null) |p_type| {
+                allocator.free(p_type);
+            }
+        }
+
         try result.append(allocator, .{
             .raw_name = try allocator.dupe(u8, name),
-            .norm_name = try allocator.dupe(u8, name),
+            .norm_name = try normalizeWinRtMethodName(allocator, name),
             .vtbl_sig = try allocator.dupe(u8, "VtblPlaceholder"),
             .wrapper_sig = try allocator.dupe(u8, ""),
             .wrapper_call = try allocator.dupe(u8, ""),
@@ -1074,6 +1458,96 @@ fn collectInterfaceMethodsByName(
     return result;
 }
 
+pub fn emitFunctions(
+    allocator: std.mem.Allocator,
+    writer: anytype,
+    ctx: Context,
+    type_row: u32,
+) !void {
+    const type_def = try ctx.table_info.readTypeDef(type_row);
+    const type_name = try ctx.heaps.getString(type_def.type_name);
+
+    const range = try methodRange(ctx.table_info, type_row);
+    var i = range.start;
+    
+    // We need to group functions by their DLL (ImportScope)
+    // For now, we'll emit them individually. 
+    // In a real scenario, Win32 functions are in a class with no fields and only static methods.
+    
+    try writer.print("// Standalone functions for {s}\n", .{type_name});
+
+    while (i < range.end_exclusive) : (i += 1) {
+        const m = try ctx.table_info.readMethodDef(i);
+        const name = try ctx.heaps.getString(m.name);
+        
+        // Check if static (0x0010)
+        if ((m.flags & 0x0010) == 0) continue;
+
+        try registerAssociatedEnumDependencies(allocator, ctx, i);
+
+        const sig_blob = try ctx.heaps.getBlob(m.signature);
+        var sig_c = SigCursor{ .data = sig_blob };
+        _ = sig_c.readByte(); 
+        const param_count = sig_c.readCompressedUInt() orelse 0;
+        const ret_type_opt = try decodeSigType(allocator, ctx, &sig_c, false);
+        const ret_type = ret_type_opt orelse "void";
+        defer if (ret_type_opt != null) allocator.free(ret_type);
+
+        // Collect actual parameter names
+        var param_names_meta = try collectParamNames(allocator, ctx, i);
+        defer param_names_meta.deinit(allocator);
+        var all_param_names = std.ArrayList([]const u8).empty;
+        defer {
+            for (all_param_names.items) |n| allocator.free(n);
+            all_param_names.deinit(allocator);
+        }
+        for (param_names_meta.items) |pn| {
+            try all_param_names.append(allocator, try sanitizeIdentifier(allocator, pn));
+        }
+        while (all_param_names.items.len < param_count) {
+            try all_param_names.append(allocator, try std.fmt.allocPrint(allocator, "p{d}", .{all_param_names.items.len}));
+        }
+
+        var params = std.ArrayList([]const u8).empty;
+        defer {
+            for (params.items) |p| allocator.free(p);
+            params.deinit(allocator);
+        }
+
+        var p_idx: u32 = 0;
+        while (p_idx < param_count) : (p_idx += 1) {
+            const p_type_opt = try decodeSigType(allocator, ctx, &sig_c, false);
+            try params.append(allocator, p_type_opt orelse try allocator.dupe(u8, "?*anyopaque"));
+        }
+
+        // Try to find DLL name from ImplMap
+        const dll_name = try findDllName(ctx, i) orelse "UNKNOWN";
+
+        try writer.print("pub extern \"{s}\" fn {s}(", .{ dll_name, name });
+        for (params.items, 0..) |p, pi| {
+            if (pi > 0) try writer.writeAll(", ");
+            const p_name = all_param_names.items[pi];
+            try writer.print("{s}: {s}", .{ p_name, p });
+        }
+        try writer.print(") callconv(.winapi) {s};\n", .{ret_type});
+    }
+    try writer.writeAll("\n");
+}
+
+fn findDllName(ctx: Context, method_row: u32) !?[]const u8 {
+    const im_table = ctx.table_info.getTable(.ImplMap);
+    var row: u32 = 1;
+    while (row <= im_table.row_count) : (row += 1) {
+        const im = try ctx.table_info.readImplMap(row);
+        const member = try coded.decodeMemberForwarded(im.member_forwarded);
+        if (member.table == .MethodDef and member.row == method_row) {
+            const mr = try ctx.table_info.readModuleRef(im.import_scope);
+            return try ctx.heaps.getString(mr.name);
+        }
+    }
+    return null;
+}
+
 pub fn identifyTypeCategory(ctx: Context, type_row: u32) !TypeCategory {
     const td = try ctx.table_info.readTypeDef(type_row);
     if ((td.flags & 0x00000020) != 0) return .interface;
@@ -1082,6 +1556,7 @@ pub fn identifyTypeCategory(ctx: Context, type_row: u32) !TypeCategory {
     const base = try resolveTypeDefOrRefNameRaw(ctx, extends_tdor) orelse return .other;
     if (std.mem.eql(u8, base, "Enum")) return .enum_type;
     if (std.mem.eql(u8, base, "ValueType")) return .struct_type;
+    if (std.mem.eql(u8, base, "MulticastDelegate")) return .delegate;
     return .class;
 }
 
@@ -1120,35 +1595,51 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
         0x11, 0x12 => blk: {
             const tdor_idx = c.readCompressedUInt() orelse break :blk null;
             const tdor = try coded.decodeTypeDefOrRef(tdor_idx);
-            const full = try resolveTypeDefOrRefNameRaw(ctx, tdor) orelse break :blk null;
+            const full = try resolveTypeDefOrRefFullNameAlloc(allocator, ctx, tdor) orelse break :blk null;
+            defer allocator.free(full);
+
             if (std.mem.eql(u8, full, "System.Guid") or std.mem.eql(u8, full, "Guid")) break :blk try allocator.dupe(u8, "GUID");
             if (std.mem.eql(u8, full, "System.IntPtr")) break :blk try allocator.dupe(u8, "isize");
             if (std.mem.eql(u8, full, "System.UIntPtr")) break :blk try allocator.dupe(u8, "usize");
+            if (std.mem.endsWith(u8, full, ".HWND")) break :blk try allocator.dupe(u8, "HWND");
+            if (std.mem.endsWith(u8, full, ".HANDLE")) break :blk try allocator.dupe(u8, "HANDLE");
+            if (std.mem.endsWith(u8, full, ".BOOL")) break :blk try allocator.dupe(u8, "BOOL");
+            if (std.mem.endsWith(u8, full, ".WPARAM")) break :blk try allocator.dupe(u8, "WPARAM");
+            if (std.mem.endsWith(u8, full, ".LPARAM")) break :blk try allocator.dupe(u8, "LPARAM");
+            if (std.mem.endsWith(u8, full, ".LPCWSTR")) break :blk try allocator.dupe(u8, "LPCWSTR");
+            if (std.mem.endsWith(u8, full, ".LPWSTR")) break :blk try allocator.dupe(u8, "LPWSTR");
+            if (std.mem.endsWith(u8, full, ".HRESULT")) break :blk try allocator.dupe(u8, "HRESULT");
             const dot = std.mem.lastIndexOfScalar(u8, full, '.');
-            const short = if (dot) |d| full[d+1..] else full;
+            const short = if (dot) |d| full[d + 1 ..] else full;
+
+            try ctx.registerDependency(allocator, full);
+
             var found_td: ?u32 = null;
             if (tdor.table == .TypeDef) {
                 found_td = tdor.row;
             } else {
-                const t = ctx.table_info.getTable(.TypeDef);
-                var row: u32 = 1;
-                while (row <= t.row_count) : (row += 1) {
-                    const td = try ctx.table_info.readTypeDef(row);
-                    const name_td = try ctx.heaps.getString(td.type_name);
-                    if (std.mem.eql(u8, name_td, short)) { found_td = row; break; }
-                }
+                found_td = resolveTypeDefOrRefToRow(ctx, tdor) catch null;
             }
+
             if (found_td) |td_row| {
                 const cat = identifyTypeCategory(ctx, td_row) catch .other;
                 if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
                 if (cat == .struct_type) break :blk try allocator.dupe(u8, short);
                 if (cat == .interface) break :blk try allocator.dupe(u8, short);
             }
-            // Well-known types without TypeDef in this winmd
+
+            // Well-known types or cross-WinMD types not in this TypeDef table
             if (std.mem.eql(u8, short, "IInspectable")) break :blk try allocator.dupe(u8, "IInspectable");
             if (std.mem.eql(u8, short, "IXamlType")) break :blk try allocator.dupe(u8, "IXamlType");
             if (std.mem.eql(u8, short, "EventRegistrationToken")) break :blk try allocator.dupe(u8, "EventRegistrationToken");
             if (isKnownStruct(short)) break :blk try allocator.dupe(u8, short);
+            
+            // For cross-WinMD references (e.g. Windows.Foundation), we often want the short name.
+            // If it looks like an interface or is in a Windows namespace, use the short name.
+            if (isInterfaceType(short) or std.mem.startsWith(u8, full, "Windows.")) {
+                break :blk try allocator.dupe(u8, short);
+            }
+
             break :blk try allocator.dupe(u8, "?*anyopaque");
         },
         0x1d => blk: {
@@ -1172,7 +1663,11 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
             }
             // Resolve the base type name
             const tdor = try coded.decodeTypeDefOrRef(tdor_idx);
-            const full = try resolveTypeDefOrRefNameRaw(ctx, tdor) orelse break :blk try allocator.dupe(u8, "?*anyopaque");
+            const full = try resolveTypeDefOrRefFullNameAlloc(allocator, ctx, tdor) orelse break :blk try allocator.dupe(u8, "?*anyopaque");
+            defer allocator.free(full);
+
+            try ctx.registerDependency(allocator, full);
+
             // Strip namespace
             const dot = std.mem.lastIndexOfScalar(u8, full, '.');
             const short_raw = if (dot) |d| full[d + 1 ..] else full;
@@ -1187,4 +1682,223 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
         },
         else => try allocator.dupe(u8, "?*anyopaque"),
     };
+}
+
+pub fn emitClass(allocator: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
+    const type_def = try ctx.table_info.readTypeDef(type_row);
+    const type_name = try ctx.heaps.getString(type_def.type_name);
+    const ns = try ctx.heaps.getString(type_def.type_namespace);
+    
+    const full_name = try std.fmt.allocPrint(allocator, "{s}.{s}", .{ns, type_name});
+    defer allocator.free(full_name);
+
+    // Resolve default interface
+    const rctx = @import("resolver.zig").Context{ .table_info = ctx.table_info, .heaps = ctx.heaps };
+    const default_iface_full_opt = @import("resolver.zig").resolveDefaultInterfaceNameForRuntimeClassAlloc(rctx, allocator, full_name) catch null;
+
+    var ifaces_to_implement = std.ArrayList([]const u8).empty;
+    defer {
+        for (ifaces_to_implement.items) |item| allocator.free(item);
+        ifaces_to_implement.deinit(allocator);
+    }
+
+    var default_iface_short: ?[]const u8 = null;
+    if (default_iface_full_opt) |full| {
+        defer allocator.free(full);
+        try ctx.registerDependency(allocator, full);
+        const dot = std.mem.lastIndexOfScalar(u8, full, '.') orelse 0;
+        const short = if (dot > 0) full[dot + 1 ..] else full;
+        default_iface_short = try allocator.dupe(u8, short);
+        try appendUniqueShortName(allocator, &ifaces_to_implement, short);
+    }
+    defer if (default_iface_short) |short| allocator.free(short);
+
+    // Also register factory/statics interfaces (any other implemented interfaces)
+    const ii_table = ctx.table_info.getTable(.InterfaceImpl);
+    var row: u32 = 1;
+    while (row <= ii_table.row_count) : (row += 1) {
+        const ii = try ctx.table_info.readInterfaceImpl(row);
+        if (ii.class == type_row) {
+            const iface_tdor = try coded.decodeTypeDefOrRef(ii.interface);
+            if (iface_tdor.table == .TypeSpec) {
+                const ts = ctx.table_info.readTypeSpec(iface_tdor.row) catch continue;
+                const sig = try ctx.heaps.getBlob(ts.signature);
+                var sig_c = SigCursor{ .data = sig };
+                const parsed = try decodeSigType(allocator, ctx, &sig_c, true);
+                if (parsed) |p| allocator.free(p);
+            }
+            const iface_name = resolveTypeDefOrRefNameRaw(ctx, iface_tdor) catch continue;
+            if (iface_name) |n| {
+                const clean = if (std.mem.indexOfScalar(u8, n, '`')) |bt| n[0..bt] else n;
+                try ctx.registerDependency(allocator, clean);
+                try appendUniqueShortName(allocator, &ifaces_to_implement, clean);
+            }
+        }
+    }
+
+    // Static and Activatable attributes
+    const ca_table = ctx.table_info.getTable(.CustomAttribute);
+    row = 1;
+    while (row <= ca_table.row_count) : (row += 1) {
+        const ca = try ctx.table_info.readCustomAttribute(row);
+        const parent = try coded.decodeHasCustomAttribute(ca.parent);
+        if (parent.table == .TypeDef and parent.row == type_row) {
+            const ty = try coded.decodeCustomAttributeType(ca.ca_type);
+            const tr = try ctx.table_info.readMemberRef(ty.row);
+            const tr_parent = try coded.decodeMemberRefParent(tr.class);
+            const tr_type = try ctx.table_info.readTypeRef(tr_parent.row);
+            const attr_name = try ctx.heaps.getString(tr_type.type_name);
+            if (std.mem.eql(u8, attr_name, "StaticAttribute") or std.mem.eql(u8, attr_name, "ActivatableAttribute")) {
+                const blob = try ctx.heaps.getBlob(ca.value);
+                // CustomAttribute blob: 0x01 0x00 followed by length-prefixed string if it takes a Type
+                // A Type string is e.g. "Windows.Foundation.IDeferralFactory"
+                if (blob.len > 3 and blob[0] == 0x01 and blob[1] == 0x00) {
+                    var c = SigCursor{ .data = blob[2..] };
+                    const len = c.readCompressedUInt() orelse 0;
+                    if (len > 0 and c.pos + len <= c.data.len) {
+                        const factory_type_full = c.data[c.pos .. c.pos + len];
+                        try ctx.registerDependency(allocator, factory_type_full);
+                        try appendUniqueShortName(allocator, &ifaces_to_implement, factory_type_full);
+                    }
+                }
+            }
+        }
+    }
+
+    var iface_head: usize = 0;
+    while (iface_head < ifaces_to_implement.items.len) : (iface_head += 1) {
+        const iface = ifaces_to_implement.items[iface_head];
+        const iface_row = findTypeDefRow(ctx, iface) catch continue;
+        var required = collectRequiredInterfaces(allocator, ctx, iface_row) catch continue;
+        defer {
+            for (required.items) |item| allocator.free(item);
+            required.deinit(allocator);
+        }
+        for (required.items) |req| {
+            try appendUniqueShortName(allocator, &ifaces_to_implement, req);
+        }
+    }
+
+    try writer.print("pub const {s} = extern struct {{\n", .{type_name});
+    if (default_iface_short) |short| {
+        try writer.print("    pub const IID = {s}.IID;\n", .{short});
+        try writer.writeAll("    lpVtbl: *const VTable,\n");
+        try writer.print("    pub const VTable = {s}.VTable;\n", .{short});
+    }
+    
+    for (ifaces_to_implement.items) |iface| {
+        if (default_iface_short) |short| {
+            if (std.mem.eql(u8, iface, short)) continue;
+        }
+        try writer.print("    pub const Requires_{s} = true; // requires {s}\n", .{ iface, iface });
+    }
+
+    var emitted_methods = std.StringHashMap(void).init(allocator);
+    defer {
+        var it = emitted_methods.keyIterator();
+        while (it.next()) |k| allocator.free(k.*);
+        emitted_methods.deinit();
+    }
+
+    for (ifaces_to_implement.items) |iface| {
+        var methods = collectInterfaceMethodsByName(allocator, ctx, iface) catch continue;
+        defer {
+            for (methods.items) |m| {
+                allocator.free(m.raw_name);
+                allocator.free(m.norm_name);
+                allocator.free(m.vtbl_sig);
+                allocator.free(m.wrapper_sig);
+                allocator.free(m.wrapper_call);
+                allocator.free(m.raw_wrapper_sig);
+                allocator.free(m.raw_wrapper_call);
+            }
+            methods.deinit(allocator);
+        }
+        for (methods.items) |m| {
+            if (!emitted_methods.contains(m.norm_name)) {
+                try writer.print("    pub fn {s}() void {{}}\n", .{m.norm_name});
+                try emitted_methods.put(try allocator.dupe(u8, m.norm_name), {});
+            }
+            if (!std.mem.eql(u8, m.norm_name, m.raw_name)) {
+                if (!emitted_methods.contains(m.raw_name)) {
+                    try writer.print("    pub fn {s}() void {{}}\n", .{m.raw_name});
+                    try emitted_methods.put(try allocator.dupe(u8, m.raw_name), {});
+                }
+            }
+        }
+    }
+
+    try writer.writeAll("};\n\n");
+}
+
+pub fn emitDelegate(allocator: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
+    const type_def = try ctx.table_info.readTypeDef(type_row);
+    const type_name = try ctx.heaps.getString(type_def.type_name);
+    const ns = try ctx.heaps.getString(type_def.type_namespace);
+    const is_winrt = !std.mem.startsWith(u8, ns, "Windows.Win32.") and !std.mem.startsWith(u8, ns, "Windows.Wdk.");
+
+    if (is_winrt) {
+        // WinRT delegates are COM interfaces
+        try emitInterface(allocator, writer, ctx, "", type_name);
+        return;
+    }
+
+    // Win32 Delegate (function pointer type alias)
+    const method_range_info = try methodRange(ctx.table_info, type_row);
+    var i = method_range_info.start;
+    var invoke_row: ?u32 = null;
+    while (i < method_range_info.end_exclusive) : (i += 1) {
+        const m = try ctx.table_info.readMethodDef(i);
+        const name = try ctx.heaps.getString(m.name);
+        if (std.mem.eql(u8, name, "Invoke")) {
+            invoke_row = i;
+            break;
+        }
+    }
+    
+    if (invoke_row) |row| {
+        const m = try ctx.table_info.readMethodDef(row);
+        const sig_blob = try ctx.heaps.getBlob(m.signature);
+        var sig_c = SigCursor{ .data = sig_blob };
+        _ = sig_c.readByte();
+        const param_count = sig_c.readCompressedUInt() orelse 0;
+        const ret_type_opt = try decodeSigType(allocator, ctx, &sig_c, false);
+        const ret_type_raw = ret_type_opt orelse "void";
+        defer if (ret_type_opt != null) allocator.free(ret_type_raw);
+
+        var param_names_meta = try collectParamNames(allocator, ctx, row);
+        defer param_names_meta.deinit(allocator);
+
+        var params = std.ArrayList(u8).empty;
+        defer params.deinit(allocator);
+
+        var p_idx: u32 = 0;
+        while (p_idx < param_count) : (p_idx += 1) {
+            _ = (sig_c.pos < sig_c.data.len and sig_c.data[sig_c.pos] == 0x10);
+            const p_type_opt = try decodeSigType(allocator, ctx, &sig_c, false);
+            const p_type_raw = p_type_opt orelse "?*anyopaque";
+            defer if (p_type_opt != null) allocator.free(p_type_raw);
+            
+            const p_type = if (std.mem.eql(u8, p_type_raw, "anyopaque"))
+                "?*anyopaque"
+            else if (isBuiltinType(p_type_raw))
+                p_type_raw
+            else if (std.mem.startsWith(u8, p_type_raw, "*") or std.mem.startsWith(u8, p_type_raw, "?"))
+                p_type_raw
+            else if (isKnownStruct(p_type_raw) or std.mem.eql(u8, p_type_raw, "EventRegistrationToken"))
+                p_type_raw
+            else
+                "?*anyopaque";
+
+            if (p_idx > 0) try params.appendSlice(allocator, ", ");
+            
+            const p_name = if (p_idx < param_names_meta.items.len) param_names_meta.items[p_idx] else "p";
+            const sanitized = try sanitizeIdentifier(allocator, p_name);
+            defer allocator.free(sanitized);
+
+            try params.writer(allocator).print("{s}: {s}", .{sanitized, p_type});
+        }
+        
+        try writer.print("pub const {s} = ?*const fn ({s}) callconv(.winapi) {s};\n\n", .{type_name, params.items, ret_type_raw});
+    }
 }
