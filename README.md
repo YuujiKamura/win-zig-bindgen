@@ -7,7 +7,7 @@
 - WinMD parsing and resolution
 - GUID/IID generation
 - Delegate IID emit helpers
-- Shadow parity assets (`shadow/windows-rs`)
+- Shadow parity assets (`shadow/windows-rs`, mirrored from `microsoft/windows-rs`)
 - Metadata source selection:
   - Prefer sibling repo `../win-zig-metadata/lib.zig`
   - Fallback to local `metadata_local.zig`
@@ -52,6 +52,17 @@ pwsh -File ..\win-zig-core\scripts\winui3-verify-all.ps1
 ```
 
 For changes under `emit.zig`, `resolver.zig`, `main.zig`, `build.zig`, `tests/generation_parity.zig`, or `scripts/winui3-*`, treat `winui3-verify-all.ps1` as the downstream acceptance gate.
+
+## Third-party provenance
+
+This repo includes a mirrored `windows-rs` shadow corpus used for parity tests.
+
+- upstream: `microsoft/windows-rs`
+- copied/derived assets live under `shadow/windows-rs`
+- license notices: `THIRD_PARTY_NOTICES.md`
+- vendored upstream licenses:
+  - `third_party/windows-rs/LICENSE-MIT`
+  - `third_party/windows-rs/LICENSE-APACHE-2.0`
 
 ## Build Options
 
