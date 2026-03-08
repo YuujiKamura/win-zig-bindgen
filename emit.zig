@@ -1032,8 +1032,17 @@ pub fn emitStruct(allocator: std.mem.Allocator, writer: anytype, ctx: Context, t
 }
 
 fn isKnownStruct(name: []const u8) bool {
-    const structs = [_][]const u8{ "GridLength", "Color", "Point", "Size", "Rect", "Thickness", "CornerRadius" };
+    const structs = [_][]const u8{ "GridLength", "Color", "Point", "Size", "Rect", "Thickness", "CornerRadius", "CorePhysicalKeyStatus" };
     for (structs) |s| if (std.mem.eql(u8, name, s)) return true;
+    return false;
+}
+
+/// Cross-WinMD enum types that decodeSigType returns as short names.
+/// These must be treated as i32 at ABI level since the enum definition lives
+/// in a different WinMD (Windows.winmd) and resolveTypeDefOrRefToRow returns null.
+fn isKnownExternalEnum(name: []const u8) bool {
+    const enums = [_][]const u8{ "VirtualKey", "VirtualKeyModifiers", "CoreCursorType" };
+    for (enums) |e| if (std.mem.eql(u8, name, e)) return true;
     return false;
 }
 
@@ -1601,7 +1610,7 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
         0x0b => try allocator.dupe(u8, "u64"),
         0x0c => try allocator.dupe(u8, "f32"),
         0x0d => try allocator.dupe(u8, "f64"),
-        0x0e => try allocator.dupe(u8, "[*]const u16"),
+        0x0e => try allocator.dupe(u8, if (is_winrt_iface) "HSTRING" else "[*]const u16"),
         0x10 => blk: {
             const inner = try decodeSigType(allocator, ctx, c, is_winrt_iface) orelse break :blk null;
             defer allocator.free(inner);
@@ -1616,7 +1625,7 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
             _ = c.readCompressedUInt() orelse break :blk null;
             break :blk try decodeSigType(allocator, ctx, c, is_winrt_iface);
         },
-        0x1c => try allocator.dupe(u8, "HSTRING"),
+        0x1c => try allocator.dupe(u8, "IInspectable"), // ELEMENT_TYPE_OBJECT → System.Object → IInspectable
         0x11, 0x12 => blk: {
             const tdor_idx = c.readCompressedUInt() orelse break :blk null;
             const tdor = try coded.decodeTypeDefOrRef(tdor_idx);
@@ -1657,8 +1666,9 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
             if (std.mem.eql(u8, short, "IInspectable")) break :blk try allocator.dupe(u8, "IInspectable");
             if (std.mem.eql(u8, short, "IXamlType")) break :blk try allocator.dupe(u8, "IXamlType");
             if (std.mem.eql(u8, short, "EventRegistrationToken")) break :blk try allocator.dupe(u8, "EventRegistrationToken");
+            if (isKnownExternalEnum(short)) break :blk try allocator.dupe(u8, "i32");
             if (isKnownStruct(short)) break :blk try allocator.dupe(u8, short);
-            
+
             // For cross-WinMD references (e.g. Windows.Foundation), we often want the short name.
             // If it looks like an interface or is in a Windows namespace, use the short name.
             if (isInterfaceType(short) or std.mem.startsWith(u8, full, "Windows.")) {

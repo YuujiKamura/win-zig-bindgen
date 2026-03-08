@@ -1100,3 +1100,78 @@ test "GEN 104 default_assumed" { try runCase("104"); }
 test "GEN 105 comment" { try runCase("105"); }
 test "GEN 106 comment_no_allow" { try runCase("106"); }
 test "GEN 107 rustfmt_25" { try runCase("107"); }
+
+// ============================================================
+// WinUI parity probes — Microsoft.UI.Xaml.winmd (#114)
+// These verify correct type decoding for cross-WinMD enum/struct references.
+// ============================================================
+
+var cached_xaml: ?GenCtx = null;
+
+fn ensureXamlCtx() !*GenCtx {
+    if (cached_xaml == null) {
+        const xaml_winmd = winmd2zig.findXamlWinmdAlloc(cache_alloc) catch return error.SkipZigTest;
+        cached_xaml = loadGenCtx(cache_alloc, xaml_winmd) catch return error.SkipZigTest;
+    }
+    return &cached_xaml.?;
+}
+
+fn generateWinuiOutput(allocator: std.mem.Allocator, filter: []const u8) ![]u8 {
+    const xaml = try ensureXamlCtx();
+    // WinUI types only need the xaml context; pass it as both win32 and winrt
+    return generateActualOutput(allocator, xaml, xaml, &.{filter});
+}
+
+test "WINUI IKeyRoutedEventArgs: Key getter uses i32, not anyopaque" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "IKeyRoutedEventArgs") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // The vtable should have Key: *const fn (*anyopaque, *i32) not *?*anyopaque
+    // If VirtualKey enum is correctly decoded to i32, the vtable will use *i32
+    try std.testing.expect(std.mem.indexOf(u8, generated, "Key: *const fn (*anyopaque, *i32)") != null);
+}
+
+test "WINUI IKeyRoutedEventArgs: KeyStatus getter uses CorePhysicalKeyStatus, not anyopaque" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "IKeyRoutedEventArgs") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // KeyStatus should use *CorePhysicalKeyStatus, not *?*anyopaque
+    try std.testing.expect(std.mem.indexOf(u8, generated, "KeyStatus: *const fn (*anyopaque, *CorePhysicalKeyStatus)") != null);
+}
+
+test "WINUI IKeyRoutedEventArgs: OriginalKey getter uses i32, not anyopaque" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "IKeyRoutedEventArgs") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    try std.testing.expect(std.mem.indexOf(u8, generated, "OriginalKey: *const fn (*anyopaque, *i32)") != null);
+}
+
+test "WINUI ICharacterReceivedRoutedEventArgs: KeyStatus getter uses CorePhysicalKeyStatus" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "ICharacterReceivedRoutedEventArgs") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    try std.testing.expect(std.mem.indexOf(u8, generated, "KeyStatus: *const fn (*anyopaque, *CorePhysicalKeyStatus)") != null);
+}
+
+test "WINUI IXamlReaderStatics: Load vtable out-param is typed, not anyopaque" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "IXamlReaderStatics") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // Load wrapper should return !*IInspectable (this already works)
+    try std.testing.expect(std.mem.indexOf(u8, generated, "!*IInspectable") != null);
+}

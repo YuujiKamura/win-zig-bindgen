@@ -11,6 +11,7 @@ const sdk_discovery = @import("sdk_discovery.zig");
 
 pub const findWindowsKitUnionWinmdAlloc = sdk_discovery.findWindowsKitUnionWinmdAlloc;
 pub const findWin32DefaultWinmdAlloc = sdk_discovery.findWin32DefaultWinmdAlloc;
+pub const findXamlWinmdAlloc = sdk_discovery.findXamlWinmdAlloc;
 
 pub fn hasTypeDefByNameAlloc(allocator: zig_std.mem.Allocator, winmd_path: []const u8, full_name: []const u8) !bool {
     var arena = zig_std.heap.ArenaAllocator.init(allocator);
