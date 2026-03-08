@@ -299,7 +299,11 @@ pub fn main() !void {
     const rctx = resolver.Context{ .table_info = table_info, .heaps = heaps };
 
     var generated_types = zig_std.StringHashMap(void).init(allocator);
-    defer generated_types.deinit();
+    defer {
+        var it = generated_types.keyIterator();
+        while (it.next()) |k| allocator.free(k.*);
+        generated_types.deinit();
+    }
     var to_generate = zig_std.ArrayList([]const u8).empty;
     defer to_generate.deinit(allocator);
 
@@ -314,9 +318,6 @@ pub fn main() !void {
     var head: usize = 0;
     while (head < to_generate.items.len) : (head += 1) {
         const name = to_generate.items[head];
-        if (generated_types.contains(name)) continue;
-        try generated_types.put(name, {});
-
         // Try to find in current WinMD
         const current_ctx = ctx;
         const type_row_opt = if (zig_std.mem.indexOfScalar(u8, name, '.') != null)
@@ -330,6 +331,18 @@ pub fn main() !void {
         if (type_row_opt == null) continue;
 
         const type_row = type_row_opt.?;
+        const type_def = try table_info.readTypeDef(type_row);
+        const type_name = try heaps.getString(type_def.type_name);
+        const type_namespace = try heaps.getString(type_def.type_namespace);
+        const canonical_name = if (type_namespace.len == 0)
+            try allocator.dupe(u8, type_name)
+        else
+            try zig_std.fmt.allocPrint(allocator, "{s}.{s}", .{ type_namespace, type_name });
+        errdefer allocator.free(canonical_name);
+
+        if (generated_types.contains(canonical_name)) continue;
+        try generated_types.put(canonical_name, {});
+
         const cat = try emit.identifyTypeCategory(current_ctx, type_row);
         switch (cat) {
             .interface => try emit.emitInterface(allocator, writer, current_ctx, winmd_path.?, name),

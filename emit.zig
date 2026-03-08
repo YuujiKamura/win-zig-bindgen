@@ -453,6 +453,7 @@ pub fn emitInterface(
                 preserve_norm_case = true;
             }
         }
+        if (std.mem.eql(u8, name, "CreateInstance")) preserve_norm_case = true;
 
         const prev_count = seen_method_names.get(raw_name_seed) orelse 0;
         var unique = if (prev_count > 0) try std.fmt.allocPrint(allocator, "{s}_{d}", .{ raw_name_seed, prev_count }) else try allocator.dupe(u8, raw_name_seed);
@@ -469,6 +470,14 @@ pub fn emitInterface(
             break :blk try std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, suffix });
         } else try allocator.dupe(u8, norm_seed);
         if (!preserve_norm_case and norm_name.len > 0) norm_name[0] = std.ascii.toLower(norm_name[0]);
+
+        var emit_raw_wrapper_alias = true;
+        if (is_getter and (isKnownStruct(wrapper_ret) or std.mem.eql(u8, wrapper_ret, "EventRegistrationToken")) and std.mem.eql(u8, norm_name, wrapper_ret)) {
+            const renamed = try std.fmt.allocPrint(allocator, "Get{s}", .{norm_name});
+            allocator.free(norm_name);
+            norm_name = renamed;
+            emit_raw_wrapper_alias = false;
+        }
 
         const norm_prev = seen_norm_names.get(norm_name) orelse 0;
         if (norm_prev > 0) {
@@ -551,6 +560,7 @@ pub fn emitInterface(
                     .{unique},
                 );
                 raw_wrapper_call = try std.fmt.allocPrint(allocator, "return self.{s}(outer);", .{norm_name});
+                emit_raw_wrapper_alias = false;
             } else if (byref_indices.items.len > 0) {
                 // Out-param wrapper: trailing BYREF params become return values
                 // Build wrapper sig with only non-byref params
@@ -714,6 +724,13 @@ pub fn emitInterface(
             }
         }
 
+        if (!emit_raw_wrapper_alias) {
+            allocator.free(raw_wrapper_sig);
+            allocator.free(raw_wrapper_call);
+            raw_wrapper_sig = try allocator.dupe(u8, "");
+            raw_wrapper_call = try allocator.dupe(u8, "");
+        }
+
         try methods.append(allocator, .{ .raw_name = try allocator.dupe(u8, unique), .norm_name = norm_name, .vtbl_sig = vtbl_sig, .wrapper_sig = wrapper_sig, .wrapper_call = wrapper_call, .raw_wrapper_sig = raw_wrapper_sig, .raw_wrapper_call = raw_wrapper_call });
         allocator.free(unique);
     }
@@ -793,9 +810,6 @@ pub fn emitInterface(
     for (required_ifaces.items) |iface_name| {
         try writer.print("    pub const Requires_{s} = true; // requires {s}\n", .{ iface_name, iface_name });
     }
-    if (std.mem.eql(u8, type_name, "ISolidColorBrush")) {
-        try writer.writeAll("    pub const Color = extern struct { a: u8, r: u8, g: u8, b: u8 };\n");
-    }
     try writer.writeAll("    pub fn release(self: *@This()) void { comRelease(self); }\n    pub fn queryInterface(self: *@This(), comptime T: type) !*T { return comQueryInterface(self, T); }\n");
     var emitted_required_forwarders = std.StringHashMap(void).init(allocator);
     defer {
@@ -842,7 +856,7 @@ pub fn emitInterface(
     }
     for (methods.items) |m| {
         try writer.print("    {s} {{ {s} }}\n", .{ m.wrapper_sig, m.wrapper_call });
-        if (!std.mem.eql(u8, m.norm_name, m.raw_name)) try writer.print("    {s} {{ {s} }}\n", .{ m.raw_wrapper_sig, m.raw_wrapper_call });
+        if (m.raw_wrapper_sig.len > 0 and !std.mem.eql(u8, m.norm_name, m.raw_name)) try writer.print("    {s} {{ {s} }}\n", .{ m.raw_wrapper_sig, m.raw_wrapper_call });
     }
     const cat = identifyTypeCategory(ctx, type_row) catch .other;
     if (cat == .delegate) {
