@@ -103,6 +103,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     md_parity_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    md_parity_bin.root_module.addImport("winmd2zig_main", main_module);
     const run_md_parity = b.addRunArtifact(md_parity_bin);
     const test_md_parity_step = b.step("test-md-parity", "Run metadata table parity tests");
     test_md_parity_step.dependOn(&run_md_parity.step);

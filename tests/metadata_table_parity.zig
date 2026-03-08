@@ -5,6 +5,7 @@
 // gains new readXxx() methods, they turn GREEN.
 
 const std = @import("std");
+const winmd2zig = @import("winmd2zig_main");
 const win_zig_metadata = @import("win_zig_metadata");
 const pe = win_zig_metadata.pe;
 const metadata = win_zig_metadata.metadata;
@@ -55,6 +56,10 @@ fn loadWinmd(allocator: std.mem.Allocator, path: []const u8) !MdCtx {
 
 // WinMD file paths (Windows SDK)
 const uac_winmd = "C:/Program Files (x86)/Windows Kits/10/References/10.0.26100.0/Windows.Foundation.UniversalApiContract/19.0.0.0/Windows.Foundation.UniversalApiContract.winmd";
+
+fn findWin32WinmdOrSkip() ![]u8 {
+    return winmd2zig.findWin32DefaultWinmdAlloc(std.testing.allocator) catch return error.SkipZigTest;
+}
 
 // ============================================================
 // Row count parity — UniversalApiContract.winmd
@@ -146,6 +151,46 @@ test "UAC row_count: MethodSemantics = 45554" {
 }
 
 // ============================================================
+// Win32-specific table parity — tables not present in UAC
+// ============================================================
+
+test "Win32 row_count: ModuleRef > 0" {
+    const win32_winmd = try findWin32WinmdOrSkip();
+    defer std.testing.allocator.free(win32_winmd);
+    var md = try loadWinmd(std.testing.allocator, win32_winmd);
+    defer md.deinit();
+    try std.testing.expect(md.table_info.getTable(.ModuleRef).row_count > 0);
+}
+
+test "Win32 row_count: ImplMap > 0" {
+    const win32_winmd = try findWin32WinmdOrSkip();
+    defer std.testing.allocator.free(win32_winmd);
+    var md = try loadWinmd(std.testing.allocator, win32_winmd);
+    defer md.deinit();
+    try std.testing.expect(md.table_info.getTable(.ImplMap).row_count > 0);
+}
+
+test "Win32 row_count: ClassLayout > 0" {
+    const win32_winmd = try findWin32WinmdOrSkip();
+    defer std.testing.allocator.free(win32_winmd);
+    var md = try loadWinmd(std.testing.allocator, win32_winmd);
+    defer md.deinit();
+    try std.testing.expect(md.table_info.getTable(.ClassLayout).row_count > 0);
+}
+
+test "Win32 FieldRVA rows are readable when present" {
+    const win32_winmd = try findWin32WinmdOrSkip();
+    defer std.testing.allocator.free(win32_winmd);
+    var md = try loadWinmd(std.testing.allocator, win32_winmd);
+    defer md.deinit();
+    const row_count = md.table_info.getTable(.FieldRVA).row_count;
+    if (row_count == 0) return error.SkipZigTest;
+    const frva = try md.table_info.readFieldRVA(1);
+    try std.testing.expect(frva.field >= 1);
+    try std.testing.expect(frva.field <= md.table_info.getTable(.Field).row_count);
+}
+
+// ============================================================
 // Named row parity — verify string heap lookups
 // ============================================================
 
@@ -173,6 +218,38 @@ test "UAC Event row 1 name = Dismissed" {
     const ev = try md.table_info.readEvent(1);
     const name = try md.heaps.getString(ev.name);
     try std.testing.expectEqualStrings("Dismissed", name);
+}
+
+test "Win32 ModuleRef row 1 has valid name" {
+    const win32_winmd = try findWin32WinmdOrSkip();
+    defer std.testing.allocator.free(win32_winmd);
+    var md = try loadWinmd(std.testing.allocator, win32_winmd);
+    defer md.deinit();
+    const mr = try md.table_info.readModuleRef(1);
+    const name = try md.heaps.getString(mr.name);
+    try std.testing.expect(name.len > 0);
+}
+
+test "Win32 ImplMap row 1 has valid import name and scope" {
+    const win32_winmd = try findWin32WinmdOrSkip();
+    defer std.testing.allocator.free(win32_winmd);
+    var md = try loadWinmd(std.testing.allocator, win32_winmd);
+    defer md.deinit();
+    const im = try md.table_info.readImplMap(1);
+    const name = try md.heaps.getString(im.import_name);
+    try std.testing.expect(name.len > 0);
+    try std.testing.expect(im.import_scope >= 1);
+    try std.testing.expect(im.import_scope <= md.table_info.getTable(.ModuleRef).row_count);
+}
+
+test "Win32 ClassLayout row 1 has valid parent" {
+    const win32_winmd = try findWin32WinmdOrSkip();
+    defer std.testing.allocator.free(win32_winmd);
+    var md = try loadWinmd(std.testing.allocator, win32_winmd);
+    defer md.deinit();
+    const cl = try md.table_info.readClassLayout(1);
+    try std.testing.expect(cl.parent >= 1);
+    try std.testing.expect(cl.parent <= md.table_info.getTable(.TypeDef).row_count);
 }
 
 // ============================================================
