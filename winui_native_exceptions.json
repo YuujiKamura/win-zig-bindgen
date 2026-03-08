@@ -1,0 +1,71 @@
+{
+  "reason": "Types intentionally outside the normal WinMD-covered gate. These remain hand-written in com_native.zig.",
+  "types": [
+    {
+      "name": "ISwapChainPanelNative",
+      "category": "native_interop",
+      "keep_handwritten": true,
+      "why": "C++ interop header (microsoft.ui.xaml.hosting.h), not in WinMD"
+    },
+    {
+      "name": "IWindowNative",
+      "category": "native_interop",
+      "keep_handwritten": true,
+      "why": "C++ interop header, COM/native bridge, not normal WinRT projection"
+    },
+    {
+      "name": "IApplicationAbi",
+      "category": "internal_abi",
+      "keep_handwritten": true,
+      "why": "Internal ABI for Application.Resources access, not a public WinMD type"
+    },
+    {
+      "name": "IVector",
+      "category": "cross_module",
+      "keep_handwritten": true,
+      "why": "Windows.Foundation.Collections.IVector<IInspectable> — in Windows.Foundation.winmd, not Microsoft.UI.Xaml.winmd. Cross-module reference support needed first."
+    },
+    {
+      "name": "IPropertyValue",
+      "category": "cross_module",
+      "keep_handwritten": true,
+      "why": "Windows.Foundation.IPropertyValue — in system WinMD, not Microsoft.UI.Xaml.winmd"
+    },
+    {
+      "name": "IPropertyValueStatics",
+      "category": "cross_module",
+      "keep_handwritten": true,
+      "why": "Windows.Foundation.IPropertyValueStatics — in system WinMD, not Microsoft.UI.Xaml.winmd"
+    },
+    {
+      "name": "ISwapChainPanelNative2",
+      "category": "native_interop",
+      "keep_handwritten": true,
+      "why": "C++ interop header (microsoft.ui.xaml.media.dxinterop.h), not in WinMD. Extended native swap chain interface."
+    },
+    {
+      "name": "IWindow2",
+      "category": "numbered_extension",
+      "keep_handwritten": true,
+      "why": "Present in WinMD but numbered extension interface (Microsoft.UI.Xaml.IWindow2). Bindgen does not yet produce correct vtable offset for extension interfaces; keep hand-written until #114+."
+    },
+    {
+      "name": "ITabView2",
+      "category": "numbered_extension",
+      "keep_handwritten": true,
+      "why": "Present in WinMD but numbered extension interface (Microsoft.UI.Xaml.Controls.ITabView2). Bindgen does not yet produce correct vtable offset for extension interfaces; keep hand-written until #114+."
+    },
+    {
+      "name": "IFrameworkElement2",
+      "category": "numbered_extension",
+      "keep_handwritten": true,
+      "why": "Present in WinMD but numbered extension interface (Microsoft.UI.Xaml.IFrameworkElement2). Bindgen does not yet produce correct vtable offset for extension interfaces; keep hand-written until #114+."
+    },
+    {
+      "name": "IPanel2",
+      "category": "numbered_extension",
+      "keep_handwritten": true,
+      "why": "Present in WinMD but numbered extension interface (Microsoft.UI.Xaml.Controls.IPanel2). Bindgen does not yet produce correct vtable offset for extension interfaces; keep hand-written until #114+."
+    }
+  ]
+}

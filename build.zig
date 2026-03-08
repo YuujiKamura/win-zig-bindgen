@@ -111,6 +111,7 @@ pub fn build(b: *std.Build) void {
             "scripts/check-delegate-iid-vectors.ps1",
             "scripts/check-rust-case-map.ps1",
             "scripts/test-script-guards.ps1",
+            "scripts/check-winui-coverage.ps1",
         };
 
         for (script_checks) |script| {

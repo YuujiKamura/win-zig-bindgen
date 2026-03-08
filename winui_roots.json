@@ -1,0 +1,70 @@
+{
+  "consumer": "ghostty-win/src/apprt/winui3",
+  "sources": {
+    "public_facade": ["com.zig"],
+    "call_sites": [
+      "Surface.zig",
+      "App.zig",
+      "tabview_runtime.zig",
+      "xaml_helpers.zig",
+      "window_runtime.zig"
+    ]
+  },
+  "roots": {
+    "interfaces": [
+      "Microsoft.UI.Xaml.IApplicationStatics",
+      "Microsoft.UI.Xaml.IApplicationFactory",
+      "Microsoft.UI.Xaml.IApplication",
+      "Microsoft.UI.Xaml.IWindow",
+      "Microsoft.UI.Xaml.IUIElement",
+      "Microsoft.UI.Xaml.IFrameworkElement",
+      "Microsoft.UI.Xaml.Controls.IContentControl",
+      "Microsoft.UI.Xaml.Controls.IControl",
+      "Microsoft.UI.Xaml.Controls.IPanel",
+      "Microsoft.UI.Xaml.Controls.IGrid",
+      "Microsoft.UI.Xaml.Controls.IGridStatics",
+      "Microsoft.UI.Xaml.Controls.IRowDefinition",
+      "Microsoft.UI.Xaml.Controls.ITextBox",
+      "Microsoft.UI.Xaml.Controls.ITabView",
+      "Microsoft.UI.Xaml.Controls.ITabViewItem",
+      "Microsoft.UI.Xaml.Controls.ITabViewTabCloseRequestedEventArgs",
+      "Microsoft.UI.Xaml.Controls.Primitives.IRangeBase",
+      "Microsoft.UI.Xaml.Controls.Primitives.IScrollBar",
+      "Microsoft.UI.Xaml.Controls.Primitives.IScrollEventArgs",
+      "Microsoft.UI.Xaml.Controls.Primitives.IColumnDefinition",
+      "Microsoft.UI.Xaml.Media.ISolidColorBrush",
+      "Microsoft.UI.Xaml.IResourceDictionary",
+      "Microsoft.UI.Xaml.Markup.IXamlMetadataProvider",
+      "Microsoft.UI.Xaml.Markup.IXamlType",
+      "Microsoft.UI.Xaml.Markup.IXamlReaderStatics",
+      "Microsoft.UI.Xaml.Input.IKeyRoutedEventArgs",
+      "Microsoft.UI.Xaml.Input.ICharacterReceivedRoutedEventArgs",
+      "Microsoft.UI.Xaml.Input.IPointerRoutedEventArgs",
+      "Microsoft.UI.Input.IPointerPoint",
+      "Microsoft.UI.Input.IPointerPointProperties"
+    ],
+    "delegates": [
+      "Microsoft.UI.Xaml.RoutedEventHandler",
+      "Microsoft.UI.Xaml.SizeChangedEventHandler",
+      "Microsoft.UI.Xaml.Controls.SelectionChangedEventHandler",
+      "Microsoft.UI.Xaml.Controls.Primitives.ScrollEventHandler"
+    ],
+    "enums": [
+      "Microsoft.UI.Xaml.Controls.Orientation",
+      "Microsoft.UI.Xaml.Controls.Primitives.ScrollEventType",
+      "Microsoft.UI.Xaml.Controls.Primitives.ScrollingIndicatorMode",
+      "Microsoft.UI.Xaml.GridUnitType",
+      "Microsoft.UI.Xaml.HorizontalAlignment",
+      "Microsoft.UI.Xaml.VerticalAlignment",
+      "Microsoft.UI.Xaml.Visibility"
+    ],
+    "structs": [
+      "Microsoft.UI.Xaml.GridLength",
+      "Windows.Foundation.Point",
+      "Windows.Foundation.Rect"
+    ]
+  },
+  "notes": {
+    "derivation": "Extracted from com.zig gen/native re-exports and actual call sites. Does NOT define type shape — shape truth is WinMD + windows-rs."
+  }
+}

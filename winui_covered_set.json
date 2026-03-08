@@ -1,0 +1,363 @@
+{
+  "generated_at": "2026-03-08T18:27:46.4878962Z",
+  "winmd_version": "1.6.250108002",
+  "results": [
+    {
+      "type": "Microsoft.UI.Xaml.IApplicationStatics",
+      "short_name": "IApplicationStatics",
+      "anyopaque_count": 94,
+      "placeholder_count": 58,
+      "not_implemented_count": 3,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.IApplicationFactory",
+      "short_name": "IApplicationFactory",
+      "anyopaque_count": 100,
+      "placeholder_count": 61,
+      "not_implemented_count": 3,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.IApplication",
+      "short_name": "IApplication",
+      "anyopaque_count": 56,
+      "placeholder_count": 34,
+      "not_implemented_count": 2,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.IWindow",
+      "short_name": "IWindow",
+      "anyopaque_count": 1931,
+      "placeholder_count": 451,
+      "not_implemented_count": 20,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.IUIElement",
+      "short_name": "IUIElement",
+      "anyopaque_count": 1895,
+      "placeholder_count": 436,
+      "not_implemented_count": 20,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.IFrameworkElement",
+      "short_name": "IFrameworkElement",
+      "anyopaque_count": 380,
+      "placeholder_count": 112,
+      "not_implemented_count": 5,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.IContentControl",
+      "short_name": "IContentControl",
+      "anyopaque_count": 2243,
+      "placeholder_count": 529,
+      "not_implemented_count": 23,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.IControl",
+      "short_name": "IControl",
+      "anyopaque_count": 1895,
+      "placeholder_count": 436,
+      "not_implemented_count": 20,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.IPanel",
+      "short_name": "IPanel",
+      "anyopaque_count": 1916,
+      "placeholder_count": 445,
+      "not_implemented_count": 20,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.IGrid",
+      "short_name": "IGrid",
+      "anyopaque_count": 180,
+      "placeholder_count": 58,
+      "not_implemented_count": 3,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.IGridStatics",
+      "short_name": "IGridStatics",
+      "anyopaque_count": 427,
+      "placeholder_count": 115,
+      "not_implemented_count": 5,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.IRowDefinition",
+      "short_name": "IRowDefinition",
+      "anyopaque_count": 6,
+      "placeholder_count": 7,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.ITextBox",
+      "short_name": "ITextBox",
+      "anyopaque_count": 2389,
+      "placeholder_count": 589,
+      "not_implemented_count": 26,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.ITabView",
+      "short_name": "ITabView",
+      "anyopaque_count": 2470,
+      "placeholder_count": 610,
+      "not_implemented_count": 24,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.ITabViewItem",
+      "short_name": "ITabViewItem",
+      "anyopaque_count": 2289,
+      "placeholder_count": 562,
+      "not_implemented_count": 23,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.ITabViewTabCloseRequestedEventArgs",
+      "short_name": "ITabViewTabCloseRequestedEventArgs",
+      "anyopaque_count": 2289,
+      "placeholder_count": 562,
+      "not_implemented_count": 23,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.Primitives.IRangeBase",
+      "short_name": "IRangeBase",
+      "anyopaque_count": 16,
+      "placeholder_count": 13,
+      "not_implemented_count": 1,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.Primitives.IScrollBar",
+      "short_name": "IScrollBar",
+      "anyopaque_count": 16,
+      "placeholder_count": 13,
+      "not_implemented_count": 1,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.Primitives.IScrollEventArgs",
+      "short_name": "IScrollEventArgs",
+      "anyopaque_count": 6,
+      "placeholder_count": 7,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.Primitives.IColumnDefinition",
+      "short_name": "IColumnDefinition",
+      "anyopaque_count": 6,
+      "placeholder_count": 7,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Media.ISolidColorBrush",
+      "short_name": "ISolidColorBrush",
+      "anyopaque_count": 6,
+      "placeholder_count": 7,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.IResourceDictionary",
+      "short_name": "IResourceDictionary",
+      "anyopaque_count": 14,
+      "placeholder_count": 7,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Markup.IXamlMetadataProvider",
+      "short_name": "IXamlMetadataProvider",
+      "anyopaque_count": 52,
+      "placeholder_count": 13,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Markup.IXamlType",
+      "short_name": "IXamlType",
+      "anyopaque_count": 37,
+      "placeholder_count": 10,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Markup.IXamlReaderStatics",
+      "short_name": "IXamlReaderStatics",
+      "anyopaque_count": 12,
+      "placeholder_count": 7,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Input.IKeyRoutedEventArgs",
+      "short_name": "IKeyRoutedEventArgs",
+      "anyopaque_count": 14,
+      "placeholder_count": 7,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Input.ICharacterReceivedRoutedEventArgs",
+      "short_name": "ICharacterReceivedRoutedEventArgs",
+      "anyopaque_count": 8,
+      "placeholder_count": 7,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Input.IPointerRoutedEventArgs",
+      "short_name": "IPointerRoutedEventArgs",
+      "anyopaque_count": 1895,
+      "placeholder_count": 436,
+      "not_implemented_count": 20,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Input.IPointerPoint",
+      "short_name": "IPointerPoint",
+      "anyopaque_count": 5,
+      "placeholder_count": 4,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Input.IPointerPointProperties",
+      "short_name": "IPointerPointProperties",
+      "anyopaque_count": 5,
+      "placeholder_count": 4,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.RoutedEventHandler",
+      "short_name": "RoutedEventHandler",
+      "anyopaque_count": 12,
+      "placeholder_count": 10,
+      "not_implemented_count": 1,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.SizeChangedEventHandler",
+      "short_name": "SizeChangedEventHandler",
+      "anyopaque_count": 12,
+      "placeholder_count": 10,
+      "not_implemented_count": 1,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.SelectionChangedEventHandler",
+      "short_name": "SelectionChangedEventHandler",
+      "anyopaque_count": 16,
+      "placeholder_count": 10,
+      "not_implemented_count": 1,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.Primitives.ScrollEventHandler",
+      "short_name": "ScrollEventHandler",
+      "anyopaque_count": 12,
+      "placeholder_count": 10,
+      "not_implemented_count": 1,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.Orientation",
+      "short_name": "Orientation",
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.Primitives.ScrollEventType",
+      "short_name": "ScrollEventType",
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Controls.Primitives.ScrollingIndicatorMode",
+      "short_name": "ScrollingIndicatorMode",
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.GridUnitType",
+      "short_name": "GridUnitType",
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.HorizontalAlignment",
+      "short_name": "HorizontalAlignment",
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.VerticalAlignment",
+      "short_name": "VerticalAlignment",
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Visibility",
+      "short_name": "Visibility",
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.GridLength",
+      "short_name": "GridLength",
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Windows.Foundation.Point",
+      "short_name": "Point",
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Windows.Foundation.Rect",
+      "short_name": "Rect",
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    }
+  ],
+  "summary": {
+    "total": 44,
+    "ok": 10,
+    "degraded": 34
+  }
+}
