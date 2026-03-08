@@ -1116,9 +1116,21 @@ fn ensureXamlCtx() !*GenCtx {
     return &cached_xaml.?;
 }
 
+var winrt_companion: ?[1]emit.CompanionMetadata = null;
+
 fn generateWinuiOutput(allocator: std.mem.Allocator, filter: []const u8) ![]u8 {
     const xaml = try ensureXamlCtx();
-    // WinUI types only need the xaml context; pass it as both win32 and winrt
+    // Load Windows.winmd as companion for cross-WinMD resolution
+    if (winrt_companion == null) {
+        const winrt_winmd = winmd2zig.findWindowsKitUnionWinmdAlloc(cache_alloc) catch {
+            return generateActualOutput(allocator, xaml, xaml, &.{filter});
+        };
+        const winrt = loadGenCtx(cache_alloc, winrt_winmd) catch {
+            return generateActualOutput(allocator, xaml, xaml, &.{filter});
+        };
+        winrt_companion = .{.{ .table_info = winrt.table_info, .heaps = winrt.heaps }};
+    }
+    xaml.emit_ctx.companions = &winrt_companion.?;
     return generateActualOutput(allocator, xaml, xaml, &.{filter});
 }
 
@@ -1288,5 +1300,37 @@ test "WINUI #119: ThemeDictionaries getter resolves GENERICINST IMap, not anyopa
     defer allocator.free(generated);
     // ThemeDictionaries wrapper should NOT be "!*anyopaque" — it should use a resolved name
     const bad = "pub fn ThemeDictionaries(self: *@This()) !*anyopaque";
+    try std.testing.expect(std.mem.indexOf(u8, generated, bad) == null);
+}
+
+// ============================================================
+// Cross-WinMD resolution probes (#120)
+// These verify that TypeRefs pointing to types in companion WinMD
+// files resolve to concrete type names instead of !*anyopaque.
+// ============================================================
+
+test "WINUI #120: IWindow.CoreWindow resolves, not anyopaque" {
+    // IWindow.CoreWindow returns ICoreWindow (from Windows.UI.Core in Windows.winmd).
+    // Currently falls to !*anyopaque because the TypeRef can't be resolved.
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IWindow") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    const bad = "pub fn CoreWindow(self: *@This()) !*anyopaque";
+    try std.testing.expect(std.mem.indexOf(u8, generated, bad) == null);
+}
+
+test "WINUI #120: IWindow.DispatcherQueue resolves, not anyopaque" {
+    // IWindow.DispatcherQueue returns DispatcherQueue (from Microsoft.UI.Dispatching).
+    // DispatcherQueue is a class, not an interface — does not start with I.
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IWindow") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    const bad = "pub fn DispatcherQueue(self: *@This()) !*anyopaque";
     try std.testing.expect(std.mem.indexOf(u8, generated, bad) == null);
 }

@@ -61,9 +61,8 @@ pub fn build(b: *std.Build) void {
     });
     const run_tests = b.addRunArtifact(test_bin);
     
-    const test_step = b.step("test", "Run all tests");
+    const test_step = b.step("test", "Run fast unit tests");
     test_step.dependOn(&run_tests.step);
-    test_step.dependOn(audit_step);
 
     // Metadata table parity tests — verify row counts and field values against .NET reference
     const md_parity_bin = b.addTest(.{
@@ -79,7 +78,6 @@ pub fn build(b: *std.Build) void {
     const run_md_parity = b.addRunArtifact(md_parity_bin);
     const test_md_parity_step = b.step("test-md-parity", "Run metadata table parity tests");
     test_md_parity_step.dependOn(&run_md_parity.step);
-    test_step.dependOn(test_md_parity_step);
 
     // Generation parity tests — verify actual code generation output
     const gen_parity_filter = b.option([]const u8, "gen_filter", "Test name filter for gen-parity (e.g. 'GEN 049')");
@@ -97,12 +95,17 @@ pub fn build(b: *std.Build) void {
     const run_gen_parity = b.addRunArtifact(gen_parity_bin);
     const test_gen_parity_step = b.step("test-gen-parity", "Run generation parity tests");
     test_gen_parity_step.dependOn(&run_gen_parity.step);
-    test_step.dependOn(test_gen_parity_step);
+
+    const test_all_step = b.step("test-all", "Run unit tests, audit, and parity suites");
+    test_all_step.dependOn(test_step);
+    test_all_step.dependOn(audit_step);
+    test_all_step.dependOn(test_md_parity_step);
+    test_all_step.dependOn(test_gen_parity_step);
 
     // Single-shot quality gate for local/CI use.
     const gate_step = b.step("gate", "Run the full quality gate (tests + audits + parity checks)");
 
-    gate_step.dependOn(test_step);
+    gate_step.dependOn(test_all_step);
 
     if (!skip_script_checks) {
         const script_checks = [_][]const u8{

@@ -5,11 +5,17 @@ const streams = win_zig_metadata.streams;
 const coded = win_zig_metadata.coded_index;
 const resolver = @import("resolver.zig");
 
+pub const CompanionMetadata = struct {
+    table_info: tables.Info,
+    heaps: streams.Heaps,
+};
+
 pub const Context = struct {
     table_info: tables.Info,
     heaps: streams.Heaps,
     dependencies: ?*std.StringHashMap(void) = null,
     allocator: ?std.mem.Allocator = null,
+    companions: []const CompanionMetadata = &.{},
 
     pub fn registerDependency(self: Context, allocator: std.mem.Allocator, name: []const u8) !void {
         if (self.dependencies) |deps| {
@@ -315,7 +321,7 @@ pub fn emitInterface(
                 // Use logical type from decoded signature for return type
                 const logical_raw = p_type_raw; // e.g., "*IVector", "*i32", "*GridLength"
                 const logical_inner = if (std.mem.startsWith(u8, logical_raw, "*")) logical_raw[1..] else logical_raw;
-                const is_iface_return = isInterfaceType(logical_inner);
+                const is_iface_return = isInterfaceType(logical_inner) or isComObjectType(ctx, logical_inner);
 
                 allocator.free(wrapper_ret);
                 if (is_iface_return) {
@@ -397,18 +403,16 @@ pub fn emitInterface(
             // For getters, set wrapper_ret based on the return type
             if (is_getter) {
                 allocator.free(wrapper_ret);
-                if (is_iface_ret) {
+                if (is_iface_ret or isComObjectType(ctx, ret_type_raw)) {
+                    // Interface or COM class/delegate: return typed pointer
                     wrapper_ret = try std.fmt.allocPrint(allocator, "*{s}", .{ret_type_raw});
-                } else if (is_opaque_ptr) {
-                    // HSTRING/?*anyopaque: opaque getter, wrapper_ret stays as ?*anyopaque for nullable path
-                    wrapper_ret = try allocator.dupe(u8, "?*anyopaque");
                 } else if (isBuiltinType(ret_type_raw) or isKnownStruct(ret_type_raw) or
                     std.mem.eql(u8, ret_type_raw, "EventRegistrationToken"))
                 {
                     // Known primitive/struct: return by value
                     wrapper_ret = try allocator.dupe(u8, ret_type_raw);
                 } else {
-                    // Unknown struct type (Thickness, CornerRadius, etc): treat as opaque
+                    // HSTRING, ?*anyopaque, or unknown struct: opaque
                     wrapper_ret = try allocator.dupe(u8, "?*anyopaque");
                 }
             }
@@ -1146,6 +1150,45 @@ fn isInterfaceType(name: []const u8) bool {
     return name[0] == 'I' and name[1] >= 'A' and name[1] <= 'Z';
 }
 
+/// Returns true if the resolved type name represents a COM object (interface/class/delegate)
+/// by looking it up in the TypeDef table and companion metadata.
+fn isComObjectType(ctx: Context, name: []const u8) bool {
+    if (isBuiltinType(name)) return false;
+    if (isKnownStruct(name)) return false;
+    if (std.mem.eql(u8, name, "EventRegistrationToken")) return false;
+    if (std.mem.eql(u8, name, "?*anyopaque") or std.mem.eql(u8, name, "anyopaque")) return false;
+
+    // Scan primary TypeDef table
+    const t = ctx.table_info.getTable(.TypeDef);
+    var row: u32 = 1;
+    while (row <= t.row_count) : (row += 1) {
+        const td = ctx.table_info.readTypeDef(row) catch continue;
+        const td_name = ctx.heaps.getString(td.type_name) catch continue;
+        if (!typeNameMatches(name, td_name)) continue;
+        const cat = identifyTypeCategory(ctx, row) catch continue;
+        return cat == .interface or cat == .class or cat == .delegate;
+    }
+
+    // Check companion metadata
+    for (ctx.companions) |comp| {
+        const ct = comp.table_info.getTable(.TypeDef);
+        var crow: u32 = 1;
+        while (crow <= ct.row_count) : (crow += 1) {
+            const td = comp.table_info.readTypeDef(crow) catch continue;
+            const td_name = comp.heaps.getString(td.type_name) catch continue;
+            if (!typeNameMatches(name, td_name)) continue;
+            const comp_ctx = Context{
+                .table_info = comp.table_info,
+                .heaps = comp.heaps,
+            };
+            const cat = identifyTypeCategory(comp_ctx, crow) catch continue;
+            return cat == .interface or cat == .class or cat == .delegate;
+        }
+    }
+
+    return false;
+}
+
 fn defaultInit(ty: []const u8) []const u8 {
     if (std.mem.startsWith(u8, ty, "?") or std.mem.startsWith(u8, ty, "*")) return "null";
     if (std.mem.eql(u8, ty, "HSTRING")) return "null"; // HSTRING = ?*anyopaque
@@ -1317,6 +1360,28 @@ fn resolveTypeDefOrRefToRow(ctx: Context, tdor: coded.Decoded) !?u32 {
         },
         else => return null,
     }
+}
+
+/// Search companion WinMDs for a type by name and namespace.
+/// Returns the type category if found, null otherwise.
+fn resolveTypeCategoryFromCompanions(ctx: Context, ref_name: []const u8, ref_ns: []const u8) ?TypeCategory {
+    for (ctx.companions) |comp| {
+        const t = comp.table_info.getTable(.TypeDef);
+        var row: u32 = 1;
+        while (row <= t.row_count) : (row += 1) {
+            const td = comp.table_info.readTypeDef(row) catch continue;
+            const name = comp.heaps.getString(td.type_name) catch continue;
+            if (!typeNameMatches(ref_name, name)) continue;
+            const ns = comp.heaps.getString(td.type_namespace) catch continue;
+            if (!std.mem.eql(u8, ns, ref_ns)) continue;
+            const comp_ctx = Context{
+                .table_info = comp.table_info,
+                .heaps = comp.heaps,
+            };
+            return identifyTypeCategory(comp_ctx, row) catch .other;
+        }
+    }
+    return null;
 }
 
 fn resolveTypeSpecBaseType(ctx: Context, type_spec_row: u32) !?coded.Decoded {
@@ -1663,7 +1728,18 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
                 const cat = identifyTypeCategory(ctx, td_row) catch .other;
                 if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
                 if (cat == .struct_type) break :blk try allocator.dupe(u8, short);
-                if (cat == .interface) break :blk try allocator.dupe(u8, short);
+                if (cat == .interface or cat == .class or cat == .delegate) break :blk try allocator.dupe(u8, short);
+            }
+
+            // Cross-WinMD resolution: search companion metadata
+            if (found_td == null) {
+                const ns_part = if (dot) |d| full[0..d] else "";
+                if (resolveTypeCategoryFromCompanions(ctx, short, ns_part)) |cat| {
+                    if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
+                    if (cat == .struct_type or cat == .interface or cat == .delegate or cat == .class) {
+                        break :blk try allocator.dupe(u8, short);
+                    }
+                }
             }
 
             // Well-known types or cross-WinMD types not in this TypeDef table
@@ -1673,9 +1749,9 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
             if (isKnownExternalEnum(short)) break :blk try allocator.dupe(u8, "i32");
             if (isKnownStruct(short)) break :blk try allocator.dupe(u8, short);
 
-            // For cross-WinMD references (e.g. Windows.Foundation), we often want the short name.
-            // If it looks like an interface or is in a Windows namespace, use the short name.
-            if (isInterfaceType(short) or std.mem.startsWith(u8, full, "Windows.")) {
+            // For cross-WinMD references, use the short name if it looks like a COM type.
+            // Covers Windows.* (Foundation, UI) and Microsoft.* (UI.Dispatching, etc.)
+            if (isInterfaceType(short) or std.mem.startsWith(u8, full, "Windows.") or std.mem.startsWith(u8, full, "Microsoft.")) {
                 break :blk try allocator.dupe(u8, short);
             }
 
@@ -1733,12 +1809,24 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
                 if (cat == .interface or cat == .delegate) break :blk try allocator.dupe(u8, short);
             }
 
+            // Cross-WinMD companion resolution for GENERICINST
+            if (found_td == null) {
+                const ns_part = if (dot) |d| full[0..d] else "";
+                // Strip backtick from name for companion lookup
+                if (resolveTypeCategoryFromCompanions(ctx, short, ns_part)) |cat| {
+                    if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
+                    if (cat == .struct_type or cat == .interface or cat == .delegate or cat == .class) {
+                        break :blk try allocator.dupe(u8, short);
+                    }
+                }
+            }
+
             // Cross-WinMD fallback: known types and interface-like names
             if (std.mem.eql(u8, short, "IInspectable")) break :blk try allocator.dupe(u8, "IInspectable");
             if (std.mem.eql(u8, short, "EventRegistrationToken")) break :blk try allocator.dupe(u8, "EventRegistrationToken");
             if (isKnownExternalEnum(short)) break :blk try allocator.dupe(u8, "i32");
             if (isKnownStruct(short)) break :blk try allocator.dupe(u8, short);
-            if (isInterfaceType(short) or std.mem.startsWith(u8, full, "Windows.")) {
+            if (isInterfaceType(short) or std.mem.startsWith(u8, full, "Windows.") or std.mem.startsWith(u8, full, "Microsoft.")) {
                 break :blk try allocator.dupe(u8, short);
             }
 

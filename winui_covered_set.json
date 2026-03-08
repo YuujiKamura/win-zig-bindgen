@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-03-08T21:20:27.7831468Z",
+  "generated_at": "2026-03-08T22:04:36.4213520Z",
   "winmd_version": "1.6.250108002",
   "results": [
     {
       "type": "Microsoft.UI.Xaml.IApplicationStatics",
       "short_name": "IApplicationStatics",
-      "anyopaque_count": 92,
+      "anyopaque_count": 88,
       "placeholder_count": 58,
       "not_implemented_count": 3,
       "status": "DEGRADED"
@@ -13,7 +13,7 @@
     {
       "type": "Microsoft.UI.Xaml.IApplicationFactory",
       "short_name": "IApplicationFactory",
-      "anyopaque_count": 100,
+      "anyopaque_count": 96,
       "placeholder_count": 61,
       "not_implemented_count": 3,
       "status": "DEGRADED"
@@ -21,7 +21,7 @@
     {
       "type": "Microsoft.UI.Xaml.IApplication",
       "short_name": "IApplication",
-      "anyopaque_count": 52,
+      "anyopaque_count": 50,
       "placeholder_count": 34,
       "not_implemented_count": 2,
       "status": "DEGRADED"
@@ -29,7 +29,7 @@
     {
       "type": "Microsoft.UI.Xaml.IWindow",
       "short_name": "IWindow",
-      "anyopaque_count": 1830,
+      "anyopaque_count": 1595,
       "placeholder_count": 451,
       "not_implemented_count": 20,
       "status": "DEGRADED"
@@ -37,7 +37,7 @@
     {
       "type": "Microsoft.UI.Xaml.IUIElement",
       "short_name": "IUIElement",
-      "anyopaque_count": 1798,
+      "anyopaque_count": 1563,
       "placeholder_count": 436,
       "not_implemented_count": 20,
       "status": "DEGRADED"
@@ -45,7 +45,7 @@
     {
       "type": "Microsoft.UI.Xaml.IFrameworkElement",
       "short_name": "IFrameworkElement",
-      "anyopaque_count": 408,
+      "anyopaque_count": 364,
       "placeholder_count": 112,
       "not_implemented_count": 5,
       "status": "DEGRADED"
@@ -53,7 +53,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.IContentControl",
       "short_name": "IContentControl",
-      "anyopaque_count": 2185,
+      "anyopaque_count": 1904,
       "placeholder_count": 529,
       "not_implemented_count": 23,
       "status": "DEGRADED"
@@ -61,7 +61,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.IControl",
       "short_name": "IControl",
-      "anyopaque_count": 1798,
+      "anyopaque_count": 1563,
       "placeholder_count": 436,
       "not_implemented_count": 20,
       "status": "DEGRADED"
@@ -69,7 +69,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.IPanel",
       "short_name": "IPanel",
-      "anyopaque_count": 1819,
+      "anyopaque_count": 1580,
       "placeholder_count": 445,
       "not_implemented_count": 20,
       "status": "DEGRADED"
@@ -77,7 +77,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.IGrid",
       "short_name": "IGrid",
-      "anyopaque_count": 190,
+      "anyopaque_count": 174,
       "placeholder_count": 58,
       "not_implemented_count": 3,
       "status": "DEGRADED"
@@ -85,7 +85,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.IGridStatics",
       "short_name": "IGridStatics",
-      "anyopaque_count": 455,
+      "anyopaque_count": 400,
       "placeholder_count": 115,
       "not_implemented_count": 5,
       "status": "DEGRADED"
@@ -101,7 +101,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.ITextBox",
       "short_name": "ITextBox",
-      "anyopaque_count": 2311,
+      "anyopaque_count": 1999,
       "placeholder_count": 589,
       "not_implemented_count": 26,
       "status": "DEGRADED"
@@ -109,7 +109,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.ITabView",
       "short_name": "ITabView",
-      "anyopaque_count": 2451,
+      "anyopaque_count": 2128,
       "placeholder_count": 610,
       "not_implemented_count": 24,
       "status": "DEGRADED"
@@ -117,7 +117,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.ITabViewItem",
       "short_name": "ITabViewItem",
-      "anyopaque_count": 2222,
+      "anyopaque_count": 1925,
       "placeholder_count": 562,
       "not_implemented_count": 23,
       "status": "DEGRADED"
@@ -125,7 +125,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.ITabViewTabCloseRequestedEventArgs",
       "short_name": "ITabViewTabCloseRequestedEventArgs",
-      "anyopaque_count": 2222,
+      "anyopaque_count": 1925,
       "placeholder_count": 562,
       "not_implemented_count": 23,
       "status": "DEGRADED"
@@ -221,7 +221,7 @@
     {
       "type": "Microsoft.UI.Xaml.Input.IPointerRoutedEventArgs",
       "short_name": "IPointerRoutedEventArgs",
-      "anyopaque_count": 1798,
+      "anyopaque_count": 1563,
       "placeholder_count": 436,
       "not_implemented_count": 20,
       "status": "DEGRADED"
