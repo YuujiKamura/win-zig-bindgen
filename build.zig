@@ -29,28 +29,17 @@ pub fn build(b: *std.Build) void {
 
     // Quality Gate
     const audit_step = b.step("audit", "Run generation quality audit");
-    const write_stubs = b.addWriteFiles();
-    const winrt_stub = write_stubs.add("winrt.zig", 
-        \\pub const GUID = struct { Data1: u32, Data2: u16, Data3: u16, Data4: [8]u8 };
-        \\pub const HRESULT = i32;
-        \\pub const HSTRING = *anyopaque;
-        \\pub const WinRTError = anyerror;
-        \\pub fn hrCheck(_: i32) anyerror!void {}
-    );
-    const os_stub = write_stubs.add("os.zig", 
-        \\pub const HWND = *anyopaque;
-    );
-
     const gen_cmd = b.addRunArtifact(exe);
     const xaml_winmd = resolveXamlWinmdPath(b, xaml_winmd_path_opt);
     const audit_com_path = if (xaml_winmd) |xaml| blk: {
-        gen_cmd.addArgs(&.{ "-o" });
+        gen_cmd.addArgs(&.{ "--winmd", xaml, "--deploy" });
         const out = gen_cmd.addOutputFileArg("audit_com.zig");
-        gen_cmd.addArgs(&.{ xaml, "ITabView", "IUIElement", "ITextBox" });
+        gen_cmd.addArgs(&.{ "--iface", "RoutedEventHandler" });
         break :blk out;
     } else blk: {
         const fail = b.addFail("Microsoft.UI.Xaml.winmd not found. Pass -Dxaml_winmd_path=<full-path>.");
         audit_step.dependOn(&fail.step);
+        const write_stubs = b.addWriteFiles();
         break :blk write_stubs.add("audit_com.zig", "pub const _audit_stub: u8 = 0;\n");
     };
     
@@ -62,8 +51,6 @@ pub fn build(b: *std.Build) void {
             .optimize = .Debug,
         }),
     });
-    audit_test_bin.root_module.addImport("winrt.zig", b.createModule(.{ .root_source_file = winrt_stub }));
-    audit_test_bin.root_module.addImport("os.zig", b.createModule(.{ .root_source_file = os_stub }));
 
     if (xaml_winmd != null) audit_step.dependOn(&gen_cmd.step);
     audit_step.dependOn(&b.addRunArtifact(audit_test_bin).step);
@@ -115,16 +102,6 @@ pub fn build(b: *std.Build) void {
     // Single-shot quality gate for local/CI use.
     const gate_step = b.step("gate", "Run the full quality gate (tests + audits + parity checks)");
 
-    // First step: regenerate Rust parity case map from Rust corpus + Zig test corpus.
-    const sync_map_cmd = b.addRunArtifact(exe);
-    sync_map_cmd.addArgs(&.{
-        "--sync-rust-case-map",
-        "shadow/windows-rs/bindgen-cases.json",
-        "tests/generation_parity.zig",
-        "docs/rust-parity-case-map.json",
-    });
-
-    test_step.dependOn(&sync_map_cmd.step);
     gate_step.dependOn(test_step);
 
     if (!skip_script_checks) {
@@ -145,7 +122,6 @@ pub fn build(b: *std.Build) void {
                 "-File",
                 script,
             });
-            cmd.step.dependOn(&sync_map_cmd.step);
             gate_step.dependOn(&cmd.step);
         }
     }

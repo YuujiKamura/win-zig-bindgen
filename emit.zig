@@ -455,6 +455,17 @@ pub fn emitInterface(
         }
         if (std.mem.eql(u8, name, "CreateInstance")) preserve_norm_case = true;
 
+        while (raw_name_seed.len > 0 and !std.ascii.isAlphabetic(raw_name_seed[0]) and raw_name_seed[0] != '_') {
+            const new_raw = try allocator.dupe(u8, raw_name_seed[1..]);
+            allocator.free(raw_name_seed);
+            raw_name_seed = new_raw;
+        }
+        while (norm_seed.len > 0 and !std.ascii.isAlphabetic(norm_seed[0]) and norm_seed[0] != '_') {
+            const new_norm = try allocator.dupe(u8, norm_seed[1..]);
+            allocator.free(norm_seed);
+            norm_seed = new_norm;
+        }
+
         const prev_count = seen_method_names.get(raw_name_seed) orelse 0;
         var unique = if (prev_count > 0) try std.fmt.allocPrint(allocator, "{s}_{d}", .{ raw_name_seed, prev_count }) else try allocator.dupe(u8, raw_name_seed);
         // Keep IXamlMetadataProvider overload naming compatible with existing call-sites.

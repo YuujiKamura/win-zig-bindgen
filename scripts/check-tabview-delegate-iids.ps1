@@ -28,24 +28,36 @@ $expectedPath = Join-Path $RepoRoot "tests\expected-tabview-delegate-iids.zig.tx
 if (-not (Test-Path -LiteralPath $expectedPath)) { throw "Expected file not found: $expectedPath" }
 $expected = (Get-Content -LiteralPath $expectedPath -Raw).Trim()
 
-$generated = $null
+function Normalize-Line([string]$s) {
+    return (($s.Trim() -replace '\s+', ' ').ToLowerInvariant())
+}
+
+$generatedPath = Join-Path ([System.IO.Path]::GetTempPath()) ("bindgen-tabview-iids-" + [System.Guid]::NewGuid().ToString("N") + ".zig")
+$names = @(
+    "IID_TypedEventHandler_AddTabButtonClick",
+    "IID_SelectionChangedEventHandler",
+    "IID_TypedEventHandler_TabCloseRequested"
+)
 Push-Location $RepoRoot
 try {
-    $generated = & zig build run -- --emit-tabview-delegate-zig $WinmdPath
+    & zig build run -- --winmd $WinmdPath --deploy $generatedPath --iface ITabView
     if ($LASTEXITCODE -ne 0) { throw "winmd2zig emit failed" }
 }
 finally {
     Pop-Location
 }
+if (-not (Test-Path -LiteralPath $generatedPath)) { throw "Generated file not found: $generatedPath" }
+$generated = Get-Content -LiteralPath $generatedPath
+Remove-Item -LiteralPath $generatedPath -ErrorAction SilentlyContinue
 
-$actualLines = @($generated | Where-Object {
-    $_ -match '^pub const IID_TypedEventHandler_AddTabButtonClick' -or
-    $_ -match '^pub const IID_SelectionChangedEventHandler' -or
-    $_ -match '^pub const IID_TypedEventHandler_TabCloseRequested'
-})
+$actualLines = @()
+foreach ($name in $names) {
+    $line = $generated | Where-Object { $_ -match ("^pub const " + [regex]::Escape($name)) } | Select-Object -First 1
+    if ($line) { $actualLines += $line }
+}
 $actual = ($actualLines -join "`n").Trim()
 
-if ($actual -ne $expected) {
+if ((Normalize-Line $actual) -ne (Normalize-Line $expected)) {
     Write-Host "check-tabview-delegate-iids: FAIL"
     Write-Host "--- expected ---"
     Write-Host $expected

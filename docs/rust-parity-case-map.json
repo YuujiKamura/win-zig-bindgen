@@ -3,7 +3,7 @@
     "id": "001",
     "status": "mapped",
     "zig_tests": [
-      "RED 001 core_win generation parity"
+      "GEN 001 core_win"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--out core_win.rs --no-comment --in default --filter CoCreateGuid"
   },
@@ -11,7 +11,7 @@
     "id": "002",
     "status": "mapped",
     "zig_tests": [
-      "RED 002 core_win_flat generation parity"
+      "GEN 002 core_win_flat"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--out core_win_flat.rs --no-comment --in default --filter CoCreateGuid --flat"
   },
@@ -19,7 +19,7 @@
     "id": "003",
     "status": "mapped",
     "zig_tests": [
-      "RED 003 core_sys generation parity"
+      "GEN 003 core_sys"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--out core_sys.rs --no-comment --in default --filter CoCreateGuid --sys"
   },
@@ -27,7 +27,7 @@
     "id": "004",
     "status": "mapped",
     "zig_tests": [
-      "RED 004 core_sys_flat generation parity"
+      "GEN 004 core_sys_flat"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--out core_sys_flat.rs --no-comment --in default --filter CoCreateGuid --sys --flat"
   },
@@ -35,7 +35,7 @@
     "id": "005",
     "status": "mapped",
     "zig_tests": [
-      "RED 005 core_sys_no_core generation parity"
+      "GEN 005 core_sys_no_core"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--out core_sys_no_core.rs --no-comment --in default --filter CoCreateGuid --sys --no-deps"
   },
@@ -43,7 +43,7 @@
     "id": "006",
     "status": "mapped",
     "zig_tests": [
-      "RED 006 core_sys_flat_no_core generation parity"
+      "GEN 006 core_sys_flat_no_core"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--out core_sys_flat_no_core.rs --no-comment --in default --filter CoCreateGuid --sys --flat --no-deps"
   },
@@ -51,7 +51,7 @@
     "id": "007",
     "status": "mapped",
     "zig_tests": [
-      "RED 007 derive_struct generation parity"
+      "GEN 007 derive_struct"
     ],
     "note": "auto-seeded from rust case kind=test args=--out derive_struct.rs --filter DateTime TimeSpan --derive DateTime=PartialOrd"
   },
@@ -59,7 +59,7 @@
     "id": "008",
     "status": "mapped",
     "zig_tests": [
-      "RED 008 derive_cpp_struct generation parity"
+      "GEN 008 derive_cpp_struct"
     ],
     "note": "auto-seeded from rust case kind=test args=--out derive_cpp_struct.rs --filter POINT SIZE --derive POINT=PartialOrd"
   },
@@ -67,7 +67,7 @@
     "id": "009",
     "status": "mapped",
     "zig_tests": [
-      "RED 009 derive_cpp_struct_sys generation parity"
+      "GEN 009 derive_cpp_struct_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out derive_cpp_struct_sys.rs --filter POINT SIZE --sys --derive POINT=Debug"
   },
@@ -75,7 +75,7 @@
     "id": "010",
     "status": "mapped",
     "zig_tests": [
-      "RED 010 derive_enum generation parity"
+      "GEN 010 derive_enum"
     ],
     "note": "auto-seeded from rust case kind=test args=--out derive_enum.rs --filter AsyncStatus CollectionChange --derive AsyncStatus=PartialOrd"
   },
@@ -83,7 +83,7 @@
     "id": "011",
     "status": "mapped",
     "zig_tests": [
-      "RED 011 derive_cpp_enum generation parity"
+      "GEN 011 derive_cpp_enum"
     ],
     "note": "auto-seeded from rust case kind=test args=--out derive_cpp_enum.rs --filter WAIT_EVENT WIN32_ERROR --derive WAIT_EVENT=PartialOrd"
   },
@@ -91,7 +91,7 @@
     "id": "012",
     "status": "mapped",
     "zig_tests": [
-      "RED 012 derive_edges generation parity"
+      "GEN 012 derive_edges"
     ],
     "note": "auto-seeded from rust case kind=test args=--out derive_edges.rs --filter POINT SIZE --sys --derive POINT=Debug,Eq,PartialEq,PartialOrd,Ord, SIZE="
   },
@@ -99,7 +99,7 @@
     "id": "013",
     "status": "mapped",
     "zig_tests": [
-      "RED 013 enum_win generation parity"
+      "GEN 013 enum_win"
     ],
     "note": "auto-seeded from rust case kind=test args=--out enum_win.rs --filter AsyncStatus"
   },
@@ -107,7 +107,7 @@
     "id": "014",
     "status": "mapped",
     "zig_tests": [
-      "RED 014 enum_sys generation parity"
+      "GEN 014 enum_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out enum_sys.rs --filter AsyncStatus --sys"
   },
@@ -115,7 +115,7 @@
     "id": "015",
     "status": "mapped",
     "zig_tests": [
-      "RED 015 enum_flags_win generation parity"
+      "GEN 015 enum_flags_win"
     ],
     "note": "auto-seeded from rust case kind=test args=--out enum_flags_win.rs --filter ErrorOptions"
   },
@@ -123,7 +123,7 @@
     "id": "016",
     "status": "mapped",
     "zig_tests": [
-      "RED 016 enum_flags_sys generation parity"
+      "GEN 016 enum_flags_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out enum_flags_sys.rs --filter ErrorOptions --sys"
   },
@@ -131,7 +131,7 @@
     "id": "017",
     "status": "mapped",
     "zig_tests": [
-      "RED 017 enum_cpp_win generation parity"
+      "GEN 017 enum_cpp_win"
     ],
     "note": "auto-seeded from rust case kind=test args=--out enum_cpp_win.rs --filter WAIT_EVENT"
   },
@@ -139,7 +139,7 @@
     "id": "018",
     "status": "mapped",
     "zig_tests": [
-      "RED 018 enum_cpp_sys generation parity"
+      "GEN 018 enum_cpp_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out enum_cpp_sys.rs --filter WAIT_EVENT --sys"
   },
@@ -147,7 +147,7 @@
     "id": "019",
     "status": "mapped",
     "zig_tests": [
-      "RED 019 enum_cpp_flags_win generation parity"
+      "GEN 019 enum_cpp_flags_win"
     ],
     "note": "auto-seeded from rust case kind=test args=--out enum_cpp_flags_win.rs --filter GENERIC_ACCESS_RIGHTS"
   },
@@ -155,7 +155,7 @@
     "id": "020",
     "status": "mapped",
     "zig_tests": [
-      "RED 020 enum_cpp_flags_sys generation parity"
+      "GEN 020 enum_cpp_flags_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out enum_cpp_flags_sys.rs --filter GENERIC_ACCESS_RIGHTS --sys"
   },
@@ -163,7 +163,7 @@
     "id": "021",
     "status": "mapped",
     "zig_tests": [
-      "RED 021 enum_cpp_scoped_win generation parity"
+      "GEN 021 enum_cpp_scoped_win"
     ],
     "note": "auto-seeded from rust case kind=test args=--out enum_cpp_scoped_win.rs --filter SECURITY_LOGON_TYPE"
   },
@@ -171,7 +171,7 @@
     "id": "022",
     "status": "mapped",
     "zig_tests": [
-      "RED 022 enum_cpp_scoped_sys generation parity"
+      "GEN 022 enum_cpp_scoped_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out enum_cpp_scoped_sys.rs --filter SECURITY_LOGON_TYPE --sys"
   },
@@ -179,7 +179,7 @@
     "id": "023",
     "status": "mapped",
     "zig_tests": [
-      "RED 023 struct_win generation parity"
+      "GEN 023 struct_win"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_win.rs --filter RectInt32"
   },
@@ -187,7 +187,7 @@
     "id": "024",
     "status": "mapped",
     "zig_tests": [
-      "RED 024 struct_sys generation parity"
+      "GEN 024 struct_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_sys.rs --filter RectInt32 --sys"
   },
@@ -195,7 +195,7 @@
     "id": "025",
     "status": "mapped",
     "zig_tests": [
-      "RED 025 struct_cpp_win generation parity"
+      "GEN 025 struct_cpp_win"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_cpp_win.rs --filter RECT"
   },
@@ -203,7 +203,7 @@
     "id": "026",
     "status": "mapped",
     "zig_tests": [
-      "RED 026 struct_cpp_sys generation parity"
+      "GEN 026 struct_cpp_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_cpp_sys.rs --filter RECT --sys"
   },
@@ -211,7 +211,7 @@
     "id": "027",
     "status": "mapped",
     "zig_tests": [
-      "RED 027 struct_disambiguate generation parity"
+      "GEN 027 struct_disambiguate"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_disambiguate.rs --filter Windows.Foundation.Rect"
   },
@@ -219,7 +219,7 @@
     "id": "028",
     "status": "mapped",
     "zig_tests": [
-      "RED 028 struct_with_generic generation parity"
+      "GEN 028 struct_with_generic"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_with_generic.rs --filter HttpProgress"
   },
@@ -227,7 +227,7 @@
     "id": "029",
     "status": "mapped",
     "zig_tests": [
-      "RED 029 struct_with_cpp_interface generation parity"
+      "GEN 029 struct_with_cpp_interface"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_with_cpp_interface.rs --filter D3D12_RESOURCE_UAV_BARRIER"
   },
@@ -235,7 +235,7 @@
     "id": "030",
     "status": "mapped",
     "zig_tests": [
-      "RED 030 struct_with_cpp_interface_sys generation parity"
+      "GEN 030 struct_with_cpp_interface_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_with_cpp_interface_sys.rs --filter D3D12_RESOURCE_UAV_BARRIER --sys"
   },
@@ -243,7 +243,7 @@
     "id": "031",
     "status": "mapped",
     "zig_tests": [
-      "RED 031 struct_arch_a generation parity"
+      "GEN 031 struct_arch_a"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_arch_a.rs --filter SP_POWERMESSAGEWAKE_PARAMS_A"
   },
@@ -251,7 +251,7 @@
     "id": "032",
     "status": "mapped",
     "zig_tests": [
-      "RED 032 struct_arch_w generation parity"
+      "GEN 032 struct_arch_w"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_arch_w.rs --filter SP_POWERMESSAGEWAKE_PARAMS_W"
   },
@@ -259,7 +259,7 @@
     "id": "033",
     "status": "mapped",
     "zig_tests": [
-      "RED 033 struct_arch_a_sys generation parity"
+      "GEN 033 struct_arch_a_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_arch_a_sys.rs --sys --filter SP_POWERMESSAGEWAKE_PARAMS_A"
   },
@@ -267,7 +267,7 @@
     "id": "034",
     "status": "mapped",
     "zig_tests": [
-      "RED 034 struct_arch_w_sys generation parity"
+      "GEN 034 struct_arch_w_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out struct_arch_w_sys.rs --sys --filter SP_POWERMESSAGEWAKE_PARAMS_W"
   },
@@ -275,7 +275,7 @@
     "id": "035",
     "status": "mapped",
     "zig_tests": [
-      "RED 035 interface_win IStringable generation parity"
+      "GEN 035 interface_win IStringable"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface.rs --filter IStringable"
   },
@@ -283,7 +283,7 @@
     "id": "036",
     "status": "mapped",
     "zig_tests": [
-      "RED 036 interface_sys IStringable generation parity"
+      "GEN 036 interface_sys IStringable"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_sys.rs --filter IStringable --sys"
   },
@@ -291,7 +291,7 @@
     "id": "037",
     "status": "mapped",
     "zig_tests": [
-      "RED 037 interface_sys_no_core IStringable generation parity"
+      "GEN 037 interface_sys_no_core IStringable"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_sys_no_core.rs --filter IStringable --sys --no-deps"
   },
@@ -299,7 +299,7 @@
     "id": "038",
     "status": "mapped",
     "zig_tests": [
-      "RED 038 interface_cpp IPersist generation parity"
+      "GEN 038 interface_cpp IPersist"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_cpp.rs --filter IPersist"
   },
@@ -307,7 +307,7 @@
     "id": "039",
     "status": "mapped",
     "zig_tests": [
-      "RED 039 interface_cpp_sys IPersist generation parity"
+      "GEN 039 interface_cpp_sys IPersist"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_cpp_sys.rs --filter IPersist --sys"
   },
@@ -315,7 +315,7 @@
     "id": "040",
     "status": "mapped",
     "zig_tests": [
-      "RED 040 interface_cpp_sys_no_core IPersist generation parity"
+      "GEN 040 interface_cpp_sys_no_core IPersist"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_cpp_sys_no_core.rs --filter IPersist --sys --no-deps"
   },
@@ -323,7 +323,7 @@
     "id": "041",
     "status": "mapped",
     "zig_tests": [
-      "RED 041 interface_cpp_derive IPersistFile generation parity"
+      "GEN 041 interface_cpp_derive IPersistFile"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_cpp_derive.rs --filter IPersistFile"
   },
@@ -331,7 +331,7 @@
     "id": "042",
     "status": "mapped",
     "zig_tests": [
-      "RED 042 interface_cpp_derive_sys IPersistFile generation parity"
+      "GEN 042 interface_cpp_derive_sys IPersistFile"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_cpp_derive_sys.rs --filter IPersistFile --sys"
   },
@@ -339,7 +339,7 @@
     "id": "043",
     "status": "mapped",
     "zig_tests": [
-      "RED 043 interface_cpp_return_udt ID2D1Bitmap generation parity"
+      "GEN 043 interface_cpp_return_udt ID2D1Bitmap"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_cpp_return_udt.rs --filter ID2D1Bitmap D2D_SIZE_F"
   },
@@ -347,7 +347,7 @@
     "id": "044",
     "status": "mapped",
     "zig_tests": [
-      "RED 044 interface_generic IAsyncOperation generation parity"
+      "GEN 044 interface_generic IAsyncOperation"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_generic.rs --filter IAsyncOperation --no-deps"
   },
@@ -355,7 +355,7 @@
     "id": "045",
     "status": "mapped",
     "zig_tests": [
-      "RED 045 interface_required IAsyncAction generation parity"
+      "GEN 045 interface_required IAsyncAction"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_required.rs --filter IAsyncAction --no-deps"
   },
@@ -363,7 +363,7 @@
     "id": "046",
     "status": "mapped",
     "zig_tests": [
-      "RED 046 interface_required_sys IAsyncAction generation parity"
+      "GEN 046 interface_required_sys IAsyncAction"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_required_sys.rs --filter IAsyncAction --sys"
   },
@@ -371,7 +371,7 @@
     "id": "047",
     "status": "mapped",
     "zig_tests": [
-      "RED 047 interface_required_with_method IAsyncInfo generation parity"
+      "GEN 047 interface_required_with_method IAsyncInfo"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_required_with_method.rs --filter IAsyncAction AsyncStatus --no-deps"
   },
@@ -379,7 +379,7 @@
     "id": "048",
     "status": "mapped",
     "zig_tests": [
-      "RED 048 interface_required_with_method_sys IAsyncInfo generation parity"
+      "GEN 048 interface_required_with_method_sys IAsyncInfo"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_required_with_method_sys.rs --filter IAsyncAction AsyncStatus --sys"
   },
@@ -387,7 +387,7 @@
     "id": "049",
     "status": "mapped",
     "zig_tests": [
-      "RED 049 interface_iterable IVector generation parity"
+      "GEN 049 interface_iterable IVector"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_iterable.rs --filter IVector --no-deps"
   },
@@ -395,7 +395,7 @@
     "id": "050",
     "status": "mapped",
     "zig_tests": [
-      "RED 050 interface_array_return IDispatch generation parity"
+      "GEN 050 interface_array_return IDispatch"
     ],
     "note": "auto-seeded from rust case kind=test args=--out interface_array_return.rs --filter IDispatch"
   },
@@ -403,7 +403,7 @@
     "id": "051",
     "status": "mapped",
     "zig_tests": [
-      "RED 051 fn_win GetTickCount generation parity"
+      "GEN 051 fn_win GetTickCount"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_win.rs --filter GetTickCount"
   },
@@ -411,7 +411,7 @@
     "id": "052",
     "status": "mapped",
     "zig_tests": [
-      "RED 052 fn_sys GetTickCount generation parity"
+      "GEN 052 fn_sys GetTickCount"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_sys.rs --filter GetTickCount --sys"
   },
@@ -419,7 +419,7 @@
     "id": "053",
     "status": "mapped",
     "zig_tests": [
-      "RED 053 fn_sys_targets generation parity"
+      "GEN 053 fn_sys_targets"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_sys_targets.rs --filter GetTickCount --sys --link windows_targets"
   },
@@ -427,7 +427,7 @@
     "id": "054",
     "status": "mapped",
     "zig_tests": [
-      "RED 054 fn_sys_extern generation parity"
+      "GEN 054 fn_sys_extern"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_sys_extern.rs --filter GetTickCount --sys --sys-fn-extern"
   },
@@ -435,7 +435,7 @@
     "id": "055",
     "status": "mapped",
     "zig_tests": [
-      "RED 055 fn_sys_extern_ptrs generation parity"
+      "GEN 055 fn_sys_extern_ptrs"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_sys_extern_ptrs.rs --filter GetTickCount --sys --sys-fn-extern --sys-fn-ptrs"
   },
@@ -443,7 +443,7 @@
     "id": "056",
     "status": "mapped",
     "zig_tests": [
-      "RED 056 fn_sys_ptrs generation parity"
+      "GEN 056 fn_sys_ptrs"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_sys_ptrs.rs --filter GetTickCount --sys --sys-fn-ptrs"
   },
@@ -451,7 +451,7 @@
     "id": "057",
     "status": "mapped",
     "zig_tests": [
-      "RED 057 fn_associated_enum_win generation parity"
+      "GEN 057 fn_associated_enum_win"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_associated_enum_win.rs --filter CoInitializeEx"
   },
@@ -459,7 +459,7 @@
     "id": "058",
     "status": "mapped",
     "zig_tests": [
-      "RED 058 fn_associated_enum_sys generation parity"
+      "GEN 058 fn_associated_enum_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_associated_enum_sys.rs --filter CoInitializeEx --sys"
   },
@@ -467,7 +467,7 @@
     "id": "059",
     "status": "mapped",
     "zig_tests": [
-      "RED 059 fn_return_void_win generation parity"
+      "GEN 059 fn_return_void_win"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_return_void_win.rs --filter GlobalMemoryStatus"
   },
@@ -475,7 +475,7 @@
     "id": "060",
     "status": "mapped",
     "zig_tests": [
-      "RED 060 fn_return_void_sys generation parity"
+      "GEN 060 fn_return_void_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_return_void_sys.rs --filter GlobalMemoryStatus --sys"
   },
@@ -483,7 +483,7 @@
     "id": "061",
     "status": "mapped",
     "zig_tests": [
-      "RED 061 fn_no_return_win generation parity"
+      "GEN 061 fn_no_return_win"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_no_return_win.rs --filter FatalExit"
   },
@@ -491,7 +491,7 @@
     "id": "062",
     "status": "mapped",
     "zig_tests": [
-      "RED 062 fn_no_return_sys generation parity"
+      "GEN 062 fn_no_return_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_no_return_sys.rs --filter FatalExit --sys"
   },
@@ -499,7 +499,7 @@
     "id": "063",
     "status": "mapped",
     "zig_tests": [
-      "RED 063 fn_result_void_sys generation parity"
+      "GEN 063 fn_result_void_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out fn_result_void_sys.rs --filter SetComputerNameA --sys"
   },
@@ -507,7 +507,7 @@
     "id": "064",
     "status": "mapped",
     "zig_tests": [
-      "RED 064 delegate DeferralCompletedHandler generation parity"
+      "GEN 064 delegate DeferralCompletedHandler"
     ],
     "note": "auto-seeded from rust case kind=test args=--out delegate.rs --filter DeferralCompletedHandler"
   },
@@ -515,7 +515,7 @@
     "id": "065",
     "status": "mapped",
     "zig_tests": [
-      "RED 065 delegate_generic EventHandler generation parity"
+      "GEN 065 delegate_generic EventHandler"
     ],
     "note": "auto-seeded from rust case kind=test args=--out delegate_generic.rs --filter EventHandler"
   },
@@ -523,7 +523,7 @@
     "id": "066",
     "status": "mapped",
     "zig_tests": [
-      "RED 066 delegate_cpp GetProcAddress EnumWindows generation parity"
+      "GEN 066 delegate_cpp GetProcAddress EnumWindows"
     ],
     "note": "auto-seeded from rust case kind=test args=--out delegate_cpp.rs --filter GetProcAddress EnumWindows"
   },
@@ -531,7 +531,7 @@
     "id": "067",
     "status": "mapped",
     "zig_tests": [
-      "RED 067 delegate_cpp_ref PFN symbols generation parity"
+      "GEN 067 delegate_cpp_ref PFN symbols"
     ],
     "note": "auto-seeded from rust case kind=test args=--out delegate_cpp_ref.rs --filter PFN_D3D12_CREATE_DEVICE PFNGETACTIVATIONFACTORY S_OK CLASS_E_CLASSNOTAVAILABLE"
   },
@@ -539,7 +539,7 @@
     "id": "068",
     "status": "mapped",
     "zig_tests": [
-      "RED 068 delegate_param SetConsoleCtrlHandler generation parity"
+      "GEN 068 delegate_param SetConsoleCtrlHandler"
     ],
     "note": "auto-seeded from rust case kind=test args=--out delegate_param.rs --filter SetConsoleCtrlHandler"
   },
@@ -547,7 +547,7 @@
     "id": "069",
     "status": "mapped",
     "zig_tests": [
-      "RED 069 class Deferral generation parity"
+      "GEN 069 class Deferral"
     ],
     "note": "auto-seeded from rust case kind=test args=--out class.rs --filter Deferral"
   },
@@ -555,7 +555,7 @@
     "id": "070",
     "status": "mapped",
     "zig_tests": [
-      "RED 070 class_with_handler Deferral generation parity"
+      "GEN 070 class_with_handler Deferral"
     ],
     "note": "auto-seeded from rust case kind=test args=--out class_with_handler.rs --filter Deferral DeferralCompletedHandler"
   },
@@ -563,7 +563,7 @@
     "id": "071",
     "status": "mapped",
     "zig_tests": [
-      "RED 071 class_static GuidHelper generation parity"
+      "GEN 071 class_static GuidHelper"
     ],
     "note": "auto-seeded from rust case kind=test args=--out class_static.rs --filter GuidHelper"
   },
@@ -571,7 +571,7 @@
     "id": "072",
     "status": "mapped",
     "zig_tests": [
-      "RED 072 class_dep WwwFormUrlDecoder generation parity"
+      "GEN 072 class_dep WwwFormUrlDecoder"
     ],
     "note": "auto-seeded from rust case kind=test args=--out class_dep.rs --filter WwwFormUrlDecoder --no-deps"
   },
@@ -579,7 +579,7 @@
     "id": "073",
     "status": "mapped",
     "zig_tests": [
-      "RED 073 multi HTTP_VERSION generation parity"
+      "GEN 073 multi HTTP_VERSION"
     ],
     "note": "auto-seeded from rust case kind=test args=--out multi.rs --filter HTTP_VERSION"
   },
@@ -587,7 +587,7 @@
     "id": "074",
     "status": "mapped",
     "zig_tests": [
-      "RED 074 multi_sys HTTP_VERSION generation parity"
+      "GEN 074 multi_sys HTTP_VERSION"
     ],
     "note": "auto-seeded from rust case kind=test args=--out multi_sys.rs --filter HTTP_VERSION --sys"
   },
@@ -595,7 +595,7 @@
     "id": "075",
     "status": "mapped",
     "zig_tests": [
-      "RED 075 window_long_get_a generation parity"
+      "GEN 075 window_long_get_a"
     ],
     "note": "auto-seeded from rust case kind=test args=--out window_long_get_a.rs --filter GetWindowLongPtrA"
   },
@@ -603,7 +603,7 @@
     "id": "076",
     "status": "mapped",
     "zig_tests": [
-      "RED 076 window_long_get_w generation parity"
+      "GEN 076 window_long_get_w"
     ],
     "note": "auto-seeded from rust case kind=test args=--out window_long_get_w.rs --filter GetWindowLongPtrW"
   },
@@ -611,7 +611,7 @@
     "id": "077",
     "status": "mapped",
     "zig_tests": [
-      "RED 077 window_long_set_a generation parity"
+      "GEN 077 window_long_set_a"
     ],
     "note": "auto-seeded from rust case kind=test args=--out window_long_set_a.rs --filter SetWindowLongPtrA"
   },
@@ -619,7 +619,7 @@
     "id": "078",
     "status": "mapped",
     "zig_tests": [
-      "RED 078 window_long_set_w generation parity"
+      "GEN 078 window_long_set_w"
     ],
     "note": "auto-seeded from rust case kind=test args=--out window_long_set_w.rs --filter SetWindowLongPtrW"
   },
@@ -627,7 +627,7 @@
     "id": "079",
     "status": "mapped",
     "zig_tests": [
-      "RED 079 window_long_get_a_sys generation parity"
+      "GEN 079 window_long_get_a_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out window_long_get_a_sys.rs --filter GetWindowLongPtrA --sys"
   },
@@ -635,7 +635,7 @@
     "id": "080",
     "status": "mapped",
     "zig_tests": [
-      "RED 080 window_long_get_w_sys generation parity"
+      "GEN 080 window_long_get_w_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out window_long_get_w_sys.rs --filter GetWindowLongPtrW --sys"
   },
@@ -643,7 +643,7 @@
     "id": "081",
     "status": "mapped",
     "zig_tests": [
-      "RED 081 window_long_set_a_sys generation parity"
+      "GEN 081 window_long_set_a_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out window_long_set_a_sys.rs --filter SetWindowLongPtrA --sys"
   },
@@ -651,7 +651,7 @@
     "id": "082",
     "status": "mapped",
     "zig_tests": [
-      "RED 082 window_long_set_w_sys generation parity"
+      "GEN 082 window_long_set_w_sys"
     ],
     "note": "auto-seeded from rust case kind=test args=--out window_long_set_w_sys.rs --filter SetWindowLongPtrW --sys"
   },
@@ -659,7 +659,7 @@
     "id": "083",
     "status": "mapped",
     "zig_tests": [
-      "RED 083 reference_struct_filter generation parity"
+      "GEN 083 reference_struct_filter"
     ],
     "note": "auto-seeded from rust case kind=test args=--out reference_struct_filter.rs --filter InkTrailPoint"
   },
@@ -667,7 +667,7 @@
     "id": "084",
     "status": "mapped",
     "zig_tests": [
-      "RED 084 reference_struct_reference_type generation parity"
+      "GEN 084 reference_struct_reference_type"
     ],
     "note": "auto-seeded from rust case kind=test args=--out reference_struct_reference_type.rs --filter InkTrailPoint --reference windows,skip-root,Point"
   },
@@ -675,7 +675,7 @@
     "id": "085",
     "status": "mapped",
     "zig_tests": [
-      "RED 085 reference_struct_reference_namespace generation parity"
+      "GEN 085 reference_struct_reference_namespace"
     ],
     "note": "auto-seeded from rust case kind=test args=--out reference_struct_reference_namespace.rs --filter InkTrailPoint --reference windows,skip-root,Windows.Foundation"
   },
@@ -683,7 +683,7 @@
     "id": "086",
     "status": "mapped",
     "zig_tests": [
-      "RED 086 reference_struct_sys_filter generation parity"
+      "GEN 086 reference_struct_sys_filter"
     ],
     "note": "auto-seeded from rust case kind=test args=--out reference_struct_sys_filter.rs --sys --filter GAMING_DEVICE_MODEL_INFORMATION"
   },
@@ -691,7 +691,7 @@
     "id": "087",
     "status": "mapped",
     "zig_tests": [
-      "RED 087 reference_struct_sys_reference_type generation parity"
+      "GEN 087 reference_struct_sys_reference_type"
     ],
     "note": "auto-seeded from rust case kind=test args=--out reference_struct_sys_reference_type.rs --sys --filter GAMING_DEVICE_MODEL_INFORMATION --reference windows_sys,skip-root,GAMING_DEVICE_VENDOR_ID"
   },
@@ -699,7 +699,7 @@
     "id": "088",
     "status": "mapped",
     "zig_tests": [
-      "RED 088 reference_struct_sys_reference_namespace generation parity"
+      "GEN 088 reference_struct_sys_reference_namespace"
     ],
     "note": "auto-seeded from rust case kind=test args=--out reference_struct_sys_reference_namespace.rs --sys --filter GAMING_DEVICE_MODEL_INFORMATION --reference windows_sys,skip-root,Windows.Win32.Gaming"
   },
@@ -707,7 +707,7 @@
     "id": "089",
     "status": "mapped",
     "zig_tests": [
-      "RED 089 bool EnableMouseInPointer generation parity"
+      "GEN 089 bool EnableMouseInPointer"
     ],
     "note": "auto-seeded from rust case kind=test args=--out bool.rs --filter EnableMouseInPointer"
   },
@@ -715,7 +715,7 @@
     "id": "090",
     "status": "mapped",
     "zig_tests": [
-      "RED 090 bool_sys EnableMouseInPointer generation parity"
+      "GEN 090 bool_sys EnableMouseInPointer"
     ],
     "note": "auto-seeded from rust case kind=test args=--out bool_sys.rs --filter EnableMouseInPointer --sys"
   },
@@ -723,7 +723,7 @@
     "id": "091",
     "status": "mapped",
     "zig_tests": [
-      "RED 091 bool_sys_no_core EnableMouseInPointer generation parity"
+      "GEN 091 bool_sys_no_core EnableMouseInPointer"
     ],
     "note": "auto-seeded from rust case kind=test args=--out bool_sys_no_core.rs --filter EnableMouseInPointer --sys --no-deps"
   },
@@ -731,7 +731,7 @@
     "id": "092",
     "status": "mapped",
     "zig_tests": [
-      "RED 092 bool_event wait/event API generation parity"
+      "GEN 092 bool_event wait/event API"
     ],
     "note": "auto-seeded from rust case kind=test args=--out bool_event.rs --filter CreateEventW SetEvent NtWaitForSingleObject WaitForSingleObjectEx --reference windows,skip-root,Windows"
   },
@@ -739,7 +739,7 @@
     "id": "093",
     "status": "mapped",
     "zig_tests": [
-      "RED 093 bool_event_sans_reference wait/event API generation parity"
+      "GEN 093 bool_event_sans_reference wait/event API"
     ],
     "note": "auto-seeded from rust case kind=test args=--out bool_event_sans_reference.rs --filter CreateEventW SetEvent NtWaitForSingleObject WaitForSingleObjectEx"
   },
@@ -747,7 +747,7 @@
     "id": "094",
     "status": "mapped",
     "zig_tests": [
-      "RED 094 ref_params model object generation parity"
+      "GEN 094 ref_params model object"
     ],
     "note": "auto-seeded from rust case kind=test args=--out ref_params.rs --filter IDynamicConceptProviderConcept IModelObject IKeyStore"
   },
@@ -755,7 +755,7 @@
     "id": "095",
     "status": "mapped",
     "zig_tests": [
-      "RED 095 reference_dependency_flat generation parity"
+      "GEN 095 reference_dependency_flat"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--no-comment --out reference_dependency_flat.rs --filter IMemoryBufferReference --flat"
   },
@@ -763,7 +763,7 @@
     "id": "096",
     "status": "mapped",
     "zig_tests": [
-      "RED 096 reference_dependency_full generation parity"
+      "GEN 096 reference_dependency_full"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--no-comment --out reference_dependency_full.rs --filter IMemoryBufferReference"
   },
@@ -771,7 +771,7 @@
     "id": "097",
     "status": "mapped",
     "zig_tests": [
-      "RED 097 reference_dependency_skip_root generation parity"
+      "GEN 097 reference_dependency_skip_root"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--no-comment --out reference_dependency_skip_root.rs --filter IMemoryBufferReference"
   },
@@ -779,7 +779,7 @@
     "id": "098",
     "status": "mapped",
     "zig_tests": [
-      "RED 098 reference_dependent_flat generation parity"
+      "GEN 098 reference_dependent_flat"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--no-comment --out reference_dependent_flat.rs --filter IMemoryBuffer --reference crate::reference_dependency_flat,flat,IMemoryBufferReference"
   },
@@ -787,7 +787,7 @@
     "id": "099",
     "status": "mapped",
     "zig_tests": [
-      "RED 099 reference_dependent_full generation parity"
+      "GEN 099 reference_dependent_full"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--no-comment --out reference_dependent_full.rs --filter IMemoryBuffer --reference crate::reference_dependency_full,full,IMemoryBufferReference"
   },
@@ -795,7 +795,7 @@
     "id": "100",
     "status": "mapped",
     "zig_tests": [
-      "RED 100 reference_dependent_skip_root generation parity"
+      "GEN 100 reference_dependent_skip_root"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--no-comment --out reference_dependent_skip_root.rs --filter IMemoryBuffer --reference crate::reference_dependency_skip_root::Windows,skip-root,IMemoryBufferReference"
   },
@@ -803,7 +803,7 @@
     "id": "101",
     "status": "mapped",
     "zig_tests": [
-      "RED 101 deps library loader generation parity"
+      "GEN 101 deps library loader"
     ],
     "note": "auto-seeded from rust case kind=test args=--out deps.rs --filter FreeLibrary GetProcAddress LoadLibraryExA LOAD_LIBRARY_SEARCH_DEFAULT_DIRS --sys"
   },
@@ -811,7 +811,7 @@
     "id": "102",
     "status": "mapped",
     "zig_tests": [
-      "RED 102 sort mixed symbol generation parity"
+      "GEN 102 sort mixed symbol"
     ],
     "note": "auto-seeded from rust case kind=test args=--out sort.rs --filter E_FAIL S_FALSE E_OUTOFMEMORY ERROR_OUTOFMEMORY Windows.Foundation.Rect RECT GetTickCount FatalExit --sys --no-deps"
   },
@@ -819,7 +819,7 @@
     "id": "103",
     "status": "mapped",
     "zig_tests": [
-      "RED 103 default_default GetTickCount generation parity"
+      "GEN 103 default_default GetTickCount"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--out default_default.rs --filter GetTickCount --sys --flat --no-comment --in default"
   },
@@ -827,7 +827,7 @@
     "id": "104",
     "status": "mapped",
     "zig_tests": [
-      "RED 104 default_assumed GetTickCount generation parity"
+      "GEN 104 default_assumed GetTickCount"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--out default_assumed.rs --filter GetTickCount --sys --flat --no-comment"
   },
@@ -835,7 +835,7 @@
     "id": "105",
     "status": "mapped",
     "zig_tests": [
-      "RED 105 comment output GetTickCount generation parity"
+      "GEN 105 comment output GetTickCount"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--out comment.rs --in default --filter GetTickCount --sys --flat"
   },
@@ -843,7 +843,7 @@
     "id": "106",
     "status": "mapped",
     "zig_tests": [
-      "RED 106 comment_no_allow GetTickCount generation parity"
+      "GEN 106 comment_no_allow GetTickCount"
     ],
     "note": "auto-seeded from rust case kind=test_raw args=--out comment_no_allow.rs --in default --filter GetTickCount --sys --flat --no-allow"
   },
@@ -851,8 +851,9 @@
     "id": "107",
     "status": "mapped",
     "zig_tests": [
-      "RED 107 rustfmt_25 POINT generation parity"
+      "GEN 107 rustfmt_25 POINT"
     ],
     "note": "auto-seeded from rust case kind=bindgen args=--out rustfmt_25.rs --rustfmt max_width=25,newline_style=Unix --filter POINT --flat --no-comment --no-allow"
   }
 ]
+

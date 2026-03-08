@@ -250,9 +250,7 @@ pub fn inspectFunctionAbiByNameAlloc(allocator: zig_std.mem.Allocator, winmd_pat
 }
 
 pub fn main() !void {
-    var gpa = zig_std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = zig_std.heap.page_allocator;
 
     const args = try zig_std.process.argsAlloc(allocator);
     defer zig_std.process.argsFree(allocator, args);

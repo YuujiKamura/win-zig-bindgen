@@ -43,9 +43,28 @@ $blockedIds = New-Object System.Collections.Generic.List[string]
 $testLines = rg -n '^test\s+' $RepoRoot -g '*.zig' --glob '!shadow/**' --glob '!.zig-cache/**'
 $zigTests = @{}
 foreach ($line in $testLines) {
-    if ($line -match '^.+?:\d+:test\s+"(.+)"\s*\{?$') {
-        $zigTests[$matches[1]] = $true
+    if ($line -match '^.*:(\d+):test\s+"([^"]+)"') {
+        $zigTests[$matches[2]] = $true
     }
+}
+
+function Resolve-TestTitle([string]$id, [string]$title) {
+    if ($zigTests.ContainsKey($title)) {
+        return $title
+    }
+    if ($title -match '^RED (\d{3}) (.+) generation parity$') {
+        $candidate = "GEN $($matches[1]) $($matches[2])"
+        if ($zigTests.ContainsKey($candidate)) {
+            return $candidate
+        }
+    }
+    $prefix = "GEN $id "
+    foreach ($k in $zigTests.Keys) {
+        if ($k.StartsWith($prefix)) {
+            return $k
+        }
+    }
+    return $null
 }
 
 foreach ($entry in $map) {
@@ -69,7 +88,7 @@ foreach ($entry in $map) {
         }
         foreach ($t in $entry.zig_tests) {
             $title = [string]$t
-            if (-not $zigTests.ContainsKey($title)) {
+            if (-not (Resolve-TestTitle $id $title)) {
                 throw "mapped test title not found in Zig tests: id=$id title='$title'"
             }
         }

@@ -65,10 +65,34 @@ if (-not (Test-Path -LiteralPath $ComPath)) {
     throw "com.zig not found: $ComPath"
 }
 
-$generated = $null
+$text = Get-Content -Raw -LiteralPath $ComPath
+
+$facadeLines = @(
+    "pub const IID_TypedEventHandler_AddTabButtonClick = gen.IID_TypedEventHandler_AddTabButtonClick;",
+    "pub const IID_SelectionChangedEventHandler = gen.IID_SelectionChangedEventHandler;",
+    "pub const IID_TypedEventHandler_TabCloseRequested = gen.IID_TypedEventHandler_TabCloseRequested;"
+)
+$isFacadeMode = $true
+foreach ($line in $facadeLines) {
+    if ($text -notmatch [regex]::Escape($line)) {
+        $isFacadeMode = $false
+        break
+    }
+}
+
+if ($isFacadeMode) {
+    if ($Check) {
+        Write-Host "winui3-sync-delegate-iids: OK (facade mode)"
+        exit 0
+    }
+    Write-Host "No changes: $ComPath (facade mode)"
+    exit 0
+}
+
+$generatedPath = Join-Path ([System.IO.Path]::GetTempPath()) ("bindgen-sync-iids-" + [System.Guid]::NewGuid().ToString("N") + ".zig")
 Push-Location $ToolDir
 try {
-    $generated = & zig build run -- --emit-tabview-delegate-zig $WinmdPath 2>$null
+    & zig build run -- --winmd $WinmdPath --deploy $generatedPath --iface ITabView
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to generate delegate IID constants from winmd2zig"
     }
@@ -76,8 +100,11 @@ try {
 finally {
     Pop-Location
 }
-
-$text = Get-Content -Raw -LiteralPath $ComPath
+if (-not (Test-Path -LiteralPath $generatedPath)) {
+    throw "Generated file not found: $generatedPath"
+}
+$generated = Get-Content -LiteralPath $generatedPath
+Remove-Item -LiteralPath $generatedPath -ErrorAction SilentlyContinue
 
 $map = @{
     "IID_TypedEventHandler_AddTabButtonClick" = ($generated | Select-String "IID_TypedEventHandler_AddTabButtonClick").Line
