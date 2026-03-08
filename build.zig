@@ -93,6 +93,37 @@ pub fn build(b: *std.Build) void {
     test_red_step.dependOn(&run_red_tests.step);
     test_step.dependOn(test_red_step);
 
+    // Metadata table parity tests — verify row counts and field values against .NET reference
+    const md_parity_bin = b.addTest(.{
+        .name = "test-md-parity",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/metadata_table_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    md_parity_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_md_parity = b.addRunArtifact(md_parity_bin);
+    const test_md_parity_step = b.step("test-md-parity", "Run metadata table parity tests");
+    test_md_parity_step.dependOn(&run_md_parity.step);
+    test_step.dependOn(test_md_parity_step);
+
+    // Generation parity tests — verify actual code generation output
+    const gen_parity_bin = b.addTest(.{
+        .name = "test-gen-parity",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    gen_parity_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_parity_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_parity = b.addRunArtifact(gen_parity_bin);
+    const test_gen_parity_step = b.step("test-gen-parity", "Run generation parity tests");
+    test_gen_parity_step.dependOn(&run_gen_parity.step);
+    test_step.dependOn(test_gen_parity_step);
+
     // Single-shot quality gate for local/CI use.
     const gate_step = b.step("gate", "Run the full quality gate (tests + audits + parity checks)");
 

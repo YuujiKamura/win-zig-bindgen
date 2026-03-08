@@ -979,13 +979,18 @@ test "RED 072 class_dep WwwFormUrlDecoder generation parity" {
 test "RED 073 multi HTTP_VERSION generation parity" {
     const winmd_path = try findWin32WinmdOrSkip();
     defer std.testing.allocator.free(winmd_path);
-    try expectTypeExists(winmd_path, "Windows.Win32.Networking.WinHttp.HTTP_VERSION");
+    // HTTP_VERSION moved to HttpServer namespace in Win32 metadata v69+
+    const ok1 = try winmd2zig.hasTypeDefByNameAlloc(std.testing.allocator, winmd_path, "Windows.Win32.Networking.WinHttp.HTTP_VERSION");
+    const ok2 = try winmd2zig.hasTypeDefByNameAlloc(std.testing.allocator, winmd_path, "Windows.Win32.Networking.HttpServer.HTTP_VERSION");
+    try std.testing.expect(ok1 or ok2);
 }
 
 test "RED 074 multi_sys HTTP_VERSION generation parity" {
     const winmd_path = try findWin32WinmdOrSkip();
     defer std.testing.allocator.free(winmd_path);
-    try expectTypeExists(winmd_path, "Windows.Win32.Networking.WinHttp.HTTP_VERSION");
+    const ok1 = try winmd2zig.hasTypeDefByNameAlloc(std.testing.allocator, winmd_path, "Windows.Win32.Networking.WinHttp.HTTP_VERSION");
+    const ok2 = try winmd2zig.hasTypeDefByNameAlloc(std.testing.allocator, winmd_path, "Windows.Win32.Networking.HttpServer.HTTP_VERSION");
+    try std.testing.expect(ok1 or ok2);
 }
 
 test "RED 075 window_long_get_a generation parity" {
@@ -1113,7 +1118,10 @@ test "RED 093 bool_event_sans_reference wait/event API generation parity" {
 test "RED 094 ref_params model object generation parity" {
     const winmd_path = try findWin32WinmdOrSkip();
     defer std.testing.allocator.free(winmd_path);
-    try expectTypeExists(winmd_path, "Windows.Win32.System.Diagnostics.Debug.IModelObject");
+    // IModelObject moved to Debug.Extensions sub-namespace in Win32 metadata v69+
+    const ok1 = try winmd2zig.hasTypeDefByNameAlloc(std.testing.allocator, winmd_path, "Windows.Win32.System.Diagnostics.Debug.IModelObject");
+    const ok2 = try winmd2zig.hasTypeDefByNameAlloc(std.testing.allocator, winmd_path, "Windows.Win32.System.Diagnostics.Debug.Extensions.IModelObject");
+    try std.testing.expect(ok1 or ok2);
 }
 
 test "RED 095 reference_dependency_flat generation parity" {

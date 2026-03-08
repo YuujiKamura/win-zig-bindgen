@@ -140,8 +140,9 @@ pub fn emitInterface(
         var sig_c = SigCursor{ .data = sig_blob };
         _ = sig_c.readByte(); 
         const param_count = sig_c.readCompressedUInt() orelse 0;
-        const ret_type_raw = try decodeSigType(allocator, ctx, &sig_c, true) orelse "void";
-        defer if (!isBuiltinType(ret_type_raw) and !std.mem.eql(u8, ret_type_raw, "void") and !std.mem.eql(u8, ret_type_raw, "SZARRAY")) allocator.free(ret_type_raw);
+        const ret_type_opt = try decodeSigType(allocator, ctx, &sig_c, true);
+        const ret_type_raw = ret_type_opt orelse "void";
+        defer if (ret_type_opt != null) allocator.free(ret_type_raw);
 
 
         var vtbl_params = std.ArrayList(u8).empty;
@@ -184,9 +185,10 @@ pub fn emitInterface(
         var p_idx: u32 = 0;
         while (p_idx < param_count) : (p_idx += 1) {
             const is_byref = (sig_c.pos < sig_c.data.len and sig_c.data[sig_c.pos] == 0x10);
-            const p_type_raw = try decodeSigType(allocator, ctx, &sig_c, true) orelse "?*anyopaque";
+            const p_type_opt = try decodeSigType(allocator, ctx, &sig_c, true);
+            const p_type_raw = p_type_opt orelse "?*anyopaque";
             if (is_byref) try byref_indices.append(allocator, p_idx);
-            defer if (!isBuiltinType(p_type_raw)) allocator.free(p_type_raw);
+            defer if (p_type_opt != null) allocator.free(p_type_raw);
 
             var p_type_vtbl = if (std.mem.eql(u8, p_type_raw, "anyopaque"))
                 try allocator.dupe(u8, "?*anyopaque")
@@ -567,11 +569,81 @@ pub fn emitInterface(
         allocator.free(unique);
     }
 
+    // Collect inherited methods from parent interfaces (COM extends chain)
+    var parent_methods = try collectParentMethods(allocator, ctx, type_row);
+    defer {
+        for (parent_methods.items) |m| {
+            allocator.free(m.raw_name);
+            allocator.free(m.norm_name);
+            allocator.free(m.vtbl_sig);
+            allocator.free(m.wrapper_sig);
+            allocator.free(m.wrapper_call);
+            allocator.free(m.raw_wrapper_sig);
+            allocator.free(m.raw_wrapper_call);
+        }
+        parent_methods.deinit(allocator);
+    }
+
+    // Collect required interfaces from InterfaceImpl table (WinRT)
+    var required_ifaces = try collectRequiredInterfaces(allocator, ctx, type_row);
+    defer {
+        for (required_ifaces.items) |n| allocator.free(n);
+        required_ifaces.deinit(allocator);
+    }
+
+    var required_iface_methods = std.ArrayList(MethodMeta).empty;
+    defer {
+        for (required_iface_methods.items) |m| {
+            allocator.free(m.raw_name);
+            allocator.free(m.norm_name);
+            allocator.free(m.vtbl_sig);
+            allocator.free(m.wrapper_sig);
+            allocator.free(m.wrapper_call);
+            allocator.free(m.raw_wrapper_sig);
+            allocator.free(m.raw_wrapper_call);
+        }
+        required_iface_methods.deinit(allocator);
+    }
+    for (required_ifaces.items) |iface_name| {
+        if (std.mem.eql(u8, iface_name, type_name)) continue;
+        var iface_methods = try collectInterfaceMethodsByName(allocator, ctx, iface_name);
+        defer {
+            for (iface_methods.items) |m| {
+                allocator.free(m.raw_name);
+                allocator.free(m.norm_name);
+                allocator.free(m.vtbl_sig);
+                allocator.free(m.wrapper_sig);
+                allocator.free(m.wrapper_call);
+                allocator.free(m.raw_wrapper_sig);
+                allocator.free(m.raw_wrapper_call);
+            }
+            iface_methods.deinit(allocator);
+        }
+        for (iface_methods.items) |m| {
+            try required_iface_methods.append(allocator, .{
+                .raw_name = try allocator.dupe(u8, m.raw_name),
+                .norm_name = try allocator.dupe(u8, m.norm_name),
+                .vtbl_sig = try allocator.dupe(u8, m.vtbl_sig),
+                .wrapper_sig = try allocator.dupe(u8, m.wrapper_sig),
+                .wrapper_call = try allocator.dupe(u8, m.wrapper_call),
+                .raw_wrapper_sig = try allocator.dupe(u8, m.raw_wrapper_sig),
+                .raw_wrapper_call = try allocator.dupe(u8, m.raw_wrapper_call),
+            });
+        }
+    }
+
     try writer.print("pub const {s} = extern struct {{\n", .{type_name});
     try writer.print("    pub const IID = GUID{{ .Data1 = 0x{x:0>8}, .Data2 = 0x{x:0>4}, .Data3 = 0x{x:0>4}, .Data4 = .{{ 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2} }} }};\n", .{ std.mem.readInt(u32, guid[0..4], .little), std.mem.readInt(u16, guid[4..6], .little), std.mem.readInt(u16, guid[6..8], .little), guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15] });
     try writer.writeAll("    lpVtbl: *const VTable,\n    pub const VTable = extern struct {\n        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,\n        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,\n        Release: *const fn (*anyopaque) callconv(.winapi) u32,\n        GetIids: VtblPlaceholder,\n        GetRuntimeClassName: VtblPlaceholder,\n        GetTrustLevel: VtblPlaceholder,\n");
+    // Emit inherited parent methods (COM flat vtable: parent slots before child slots)
+    for (parent_methods.items) |m| try writer.print("        {s}: {s},\n", .{ m.raw_name, m.vtbl_sig });
+    for (required_iface_methods.items) |m| try writer.print("        {s}: {s},\n", .{ m.raw_name, m.vtbl_sig });
     for (methods.items) |m| try writer.print("        {s}: {s},\n", .{ m.raw_name, m.vtbl_sig });
     try writer.writeAll("    };\n");
+    // Emit required interface references (WinRT)
+    for (required_ifaces.items) |iface_name| {
+        try writer.print("    pub const Requires_{s} = true; // requires {s}\n", .{ iface_name, iface_name });
+    }
     if (std.mem.eql(u8, type_name, "ISolidColorBrush")) {
         try writer.writeAll("    pub const Color = extern struct { a: u8, r: u8, g: u8, b: u8 };\n");
     }
@@ -583,34 +655,139 @@ pub fn emitInterface(
     try writer.writeAll("};\n\n");
 }
 
-pub fn emitEnum(allocator: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
+pub fn emitEnum(_: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
     const type_def = try ctx.table_info.readTypeDef(type_row);
     const type_name = try ctx.heaps.getString(type_def.type_name);
-    try writer.print("pub const {s} = enum(i32) {{\n", .{type_name});
     const range = try fieldRange(ctx.table_info, type_row);
+
+    // Detect underlying type from value__ field signature
+    const backing_type = detectEnumBackingType(ctx, range) catch "i32";
+    const is_signed = backing_type[0] == 'i';
+    const is_flags = hasAttribute(ctx, type_row, "FlagsAttribute") catch false;
+
+    try writer.print("pub const {s} = enum({s}) {{\n", .{ type_name, backing_type });
+
     var i = range.start;
     while (i < range.end_exclusive) : (i += 1) {
         const f = try ctx.table_info.readField(i);
         const name = try ctx.heaps.getString(f.name);
         if (std.mem.eql(u8, name, "value__")) continue;
+
+        // Find constant value from Constant table
         const c_table = ctx.table_info.getTable(.Constant);
         var ci: u32 = 1;
-        var val: i32 = 0;
+        var val_i64: i64 = 0;
+        var val_u64: u64 = 0;
         while (ci <= c_table.row_count) : (ci += 1) {
             const c = try ctx.table_info.readConstant(ci);
             const parent = try coded.decodeHasConstant(c.parent);
             if (parent.table == .Field and parent.row == i) {
                 const blob = try ctx.heaps.getBlob(c.value);
-                if (blob.len >= 4) val = std.mem.readInt(i32, blob[0..4], .little);
+                if (is_signed) {
+                    val_i64 = readSignedConstant(blob, backing_type);
+                } else {
+                    val_u64 = readUnsignedConstant(blob, backing_type);
+                }
                 break;
             }
         }
-        const cleaned = try allocator.dupe(u8, name);
-        defer allocator.free(cleaned);
-        for (cleaned) |*ch| if (ch.* >= 'A' and ch.* <= 'Z') { ch.* = ch.* + ('a' - 'A'); };
-        try writer.print("    {s} = {d},\n", .{ cleaned, val });
+
+        if (is_signed) {
+            try writer.print("    {s} = {d},\n", .{ name, val_i64 });
+        } else {
+            try writer.print("    {s} = {d},\n", .{ name, val_u64 });
+        }
     }
+    try writer.writeAll("    _,\n");
+
+    if (is_flags) {
+        try writer.print(
+            \\
+            \\    pub fn toInt(self: @This()) {s} {{
+            \\        return @intFromEnum(self);
+            \\    }}
+            \\    pub fn fromInt(value: {s}) @This() {{
+            \\        return @enumFromInt(value);
+            \\    }}
+        , .{ backing_type, backing_type });
+        try writer.writeAll("\n");
+    }
+
     try writer.writeAll("};\n\n");
+}
+
+fn detectEnumBackingType(ctx: Context, range: MethodRange) ![]const u8 {
+    var i = range.start;
+    while (i < range.end_exclusive) : (i += 1) {
+        const f = try ctx.table_info.readField(i);
+        const name = try ctx.heaps.getString(f.name);
+        if (std.mem.eql(u8, name, "value__")) {
+            const sig_blob = try ctx.heaps.getBlob(f.signature);
+            if (sig_blob.len < 3) return "i32";
+            // Field sig: 0x06 (FIELD), optional custom mods, then element type
+            const elem = sig_blob[2];
+            return switch (elem) {
+                0x04 => "i8",
+                0x05 => "u8",
+                0x06 => "i16",
+                0x07 => "u16",
+                0x08 => "i32",
+                0x09 => "u32",
+                0x0A => "i64",
+                0x0B => "u64",
+                else => "i32",
+            };
+        }
+    }
+    return "i32";
+}
+
+fn readSignedConstant(blob: []const u8, backing_type: []const u8) i64 {
+    if (std.mem.eql(u8, backing_type, "i8")) {
+        if (blob.len >= 1) return @as(i64, @as(i8, @bitCast(blob[0])));
+    } else if (std.mem.eql(u8, backing_type, "i16")) {
+        if (blob.len >= 2) return @as(i64, std.mem.readInt(i16, blob[0..2], .little));
+    } else if (std.mem.eql(u8, backing_type, "i64")) {
+        if (blob.len >= 8) return std.mem.readInt(i64, blob[0..8], .little);
+    } else {
+        if (blob.len >= 4) return @as(i64, std.mem.readInt(i32, blob[0..4], .little));
+    }
+    return 0;
+}
+
+fn readUnsignedConstant(blob: []const u8, backing_type: []const u8) u64 {
+    if (std.mem.eql(u8, backing_type, "u8")) {
+        if (blob.len >= 1) return @as(u64, blob[0]);
+    } else if (std.mem.eql(u8, backing_type, "u16")) {
+        if (blob.len >= 2) return @as(u64, std.mem.readInt(u16, blob[0..2], .little));
+    } else if (std.mem.eql(u8, backing_type, "u64")) {
+        if (blob.len >= 8) return std.mem.readInt(u64, blob[0..8], .little);
+    } else {
+        if (blob.len >= 4) return @as(u64, std.mem.readInt(u32, blob[0..4], .little));
+    }
+    return 0;
+}
+
+fn hasAttribute(ctx: Context, type_row: u32, attr_name: []const u8) !bool {
+    const ca_table = ctx.table_info.getTable(.CustomAttribute);
+    var row: u32 = 1;
+    while (row <= ca_table.row_count) : (row += 1) {
+        const ca = try ctx.table_info.readCustomAttribute(row);
+        const parent = try coded.decodeHasCustomAttribute(ca.parent);
+        if (parent.table == .TypeDef and parent.row == type_row) {
+            const ty = try coded.decodeCustomAttributeType(ca.ca_type);
+            if (ty.table == .MemberRef) {
+                const tr = try ctx.table_info.readMemberRef(ty.row);
+                const tr_parent = try coded.decodeMemberRefParent(tr.class);
+                if (tr_parent.table == .TypeRef) {
+                    const tr_type = try ctx.table_info.readTypeRef(tr_parent.row);
+                    const tr_name = try ctx.heaps.getString(tr_type.type_name);
+                    if (std.mem.eql(u8, tr_name, attr_name)) return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 pub fn emitStruct(allocator: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
@@ -625,8 +802,9 @@ pub fn emitStruct(allocator: std.mem.Allocator, writer: anytype, ctx: Context, t
         const sig_blob = try ctx.heaps.getBlob(f.signature);
         var sig_c = SigCursor{ .data = sig_blob };
         _ = sig_c.readByte(); 
-        const ty = try decodeSigType(allocator, ctx, &sig_c, false) orelse "?*anyopaque";
-        defer if (!isBuiltinType(ty)) allocator.free(ty);
+        const ty_opt = try decodeSigType(allocator, ctx, &sig_c, false);
+        const ty = ty_opt orelse "?*anyopaque";
+        defer if (ty_opt != null) allocator.free(ty);
         try writer.print("    {s}: {s},\n", .{ name, ty });
     }
     try writer.writeAll("};\n\n");
@@ -684,18 +862,31 @@ fn isBuiltinType(t: []const u8) bool {
     return false;
 }
 
+fn typeNameMatches(query_name: []const u8, actual_name: []const u8) bool {
+    if (std.mem.eql(u8, query_name, actual_name)) return true;
+    if (actual_name.len <= query_name.len) return false;
+    if (!std.mem.startsWith(u8, actual_name, query_name)) return false;
+    return actual_name[query_name.len] == '`';
+}
+
 pub fn findTypeDefRow(ctx: Context, interface_name: []const u8) !u32 {
     const dot_index = std.mem.lastIndexOfScalar(u8, interface_name, '.');
     const want_ns = if (dot_index) |idx| interface_name[0..idx] else null;
     const want_name = if (dot_index) |idx| interface_name[idx + 1 ..] else interface_name;
     const t = ctx.table_info.getTable(.TypeDef);
+    var first_name_match: ?u32 = null;
     var row: u32 = 1;
     while (row <= t.row_count) : (row += 1) {
         const td = try ctx.table_info.readTypeDef(row);
         const name = try ctx.heaps.getString(td.type_name);
         const ns = try ctx.heaps.getString(td.type_namespace);
-        if (std.mem.eql(u8, name, want_name)) if (want_ns == null or std.mem.eql(u8, ns, want_ns.?)) return row;
+        if (!typeNameMatches(want_name, name)) continue;
+        if (want_ns == null) return row;
+        if (std.mem.eql(u8, ns, want_ns.?)) return row;
+        if (std.mem.endsWith(u8, ns, want_ns.?)) return row;
+        if (first_name_match == null) first_name_match = row;
     }
+    if (first_name_match) |r| return r;
     return error.InterfaceNotFound;
 }
 
@@ -764,6 +955,125 @@ fn resolveTypeDefOrRefNameRaw(ctx: Context, tdor: coded.Decoded) !?[]const u8 {
     };
 }
 
+/// Resolve a TypeDefOrRef coded index to a TypeDef row in the same metadata.
+/// For TypeDef, returns the row directly. For TypeRef, searches TypeDef table by name.
+/// Returns null if unresolvable (e.g., TypeSpec or not found).
+fn resolveTypeDefOrRefToRow(ctx: Context, tdor: coded.Decoded) !?u32 {
+    switch (tdor.table) {
+        .TypeDef => return tdor.row,
+        .TypeRef => {
+            const tr = try ctx.table_info.readTypeRef(tdor.row);
+            const ref_name = try ctx.heaps.getString(tr.type_name);
+            const ref_ns = try ctx.heaps.getString(tr.type_namespace);
+            const t = ctx.table_info.getTable(.TypeDef);
+            var first_name_match: ?u32 = null;
+            var row: u32 = 1;
+            while (row <= t.row_count) : (row += 1) {
+                const td = try ctx.table_info.readTypeDef(row);
+                const name = try ctx.heaps.getString(td.type_name);
+                const ns = try ctx.heaps.getString(td.type_namespace);
+                if (typeNameMatches(ref_name, name) and std.mem.eql(u8, ns, ref_ns)) return row;
+                if (first_name_match == null and typeNameMatches(ref_name, name)) first_name_match = row;
+            }
+            return first_name_match;
+        },
+        else => return null,
+    }
+}
+
+/// Collect parent interface method names for COM interfaces by walking the extends chain.
+/// Stops at IUnknown/IInspectable (already hardcoded in vtable).
+/// Returns method names in vtable order (grandparent first, then parent, etc.).
+fn collectParentMethods(allocator: std.mem.Allocator, ctx: Context, type_row: u32) !std.ArrayList(MethodMeta) {
+    var parent_chain = std.ArrayList(u32).empty;
+    defer parent_chain.deinit(allocator);
+
+    // Walk extends chain to collect parent TypeDef rows (excluding IUnknown/IInspectable)
+    var cur_row = type_row;
+    while (true) {
+        const td = try ctx.table_info.readTypeDef(cur_row);
+        if (td.extends == 0) break;
+        const extends_tdor = coded.decodeTypeDefOrRef(td.extends) catch break;
+        const parent_name = resolveTypeDefOrRefNameRaw(ctx, extends_tdor) catch break;
+        if (parent_name == null) break;
+        // Stop at IUnknown/IInspectable — these are already in the hardcoded vtable base
+        if (std.mem.eql(u8, parent_name.?, "IUnknown") or std.mem.eql(u8, parent_name.?, "IInspectable")) break;
+        const parent_row = resolveTypeDefOrRefToRow(ctx, extends_tdor) catch break;
+        if (parent_row == null) break;
+        try parent_chain.append(allocator, parent_row.?);
+        cur_row = parent_row.?;
+    }
+
+    // Reverse so grandparent methods come first
+    std.mem.reverse(u32, parent_chain.items);
+
+    var result = std.ArrayList(MethodMeta).empty;
+    for (parent_chain.items) |parent_row| {
+        const range = try methodRange(ctx.table_info, parent_row);
+        var mi = range.start;
+        while (mi < range.end_exclusive) : (mi += 1) {
+            const m = try ctx.table_info.readMethodDef(mi);
+            const name = try ctx.heaps.getString(m.name);
+            // Build a simple VtblPlaceholder entry for inherited methods
+            try result.append(allocator, .{
+                .raw_name = try allocator.dupe(u8, name),
+                .norm_name = try allocator.dupe(u8, name),
+                .vtbl_sig = try allocator.dupe(u8, "VtblPlaceholder"),
+                .wrapper_sig = try allocator.dupe(u8, ""),
+                .wrapper_call = try allocator.dupe(u8, ""),
+                .raw_wrapper_sig = try allocator.dupe(u8, ""),
+                .raw_wrapper_call = try allocator.dupe(u8, ""),
+            });
+        }
+    }
+    return result;
+}
+
+/// Collect required interface names from the InterfaceImpl table (for WinRT interfaces).
+fn collectRequiredInterfaces(allocator: std.mem.Allocator, ctx: Context, type_row: u32) !std.ArrayList([]const u8) {
+    var result = std.ArrayList([]const u8).empty;
+    const t = ctx.table_info.getTable(.InterfaceImpl);
+    var row: u32 = 1;
+    while (row <= t.row_count) : (row += 1) {
+        const impl = ctx.table_info.readInterfaceImpl(row) catch continue;
+        if (impl.class != type_row) continue;
+        const iface_tdor = coded.decodeTypeDefOrRef(impl.interface) catch continue;
+        const iface_name = resolveTypeDefOrRefNameRaw(ctx, iface_tdor) catch continue;
+        if (iface_name) |n| {
+            // Strip backtick arity suffix (e.g., "IAsyncOperation`1" -> "IAsyncOperation")
+            const backtick = std.mem.indexOfScalar(u8, n, '`');
+            const clean = if (backtick) |bt| n[0..bt] else n;
+            try result.append(allocator, try allocator.dupe(u8, clean));
+        }
+    }
+    return result;
+}
+
+fn collectInterfaceMethodsByName(
+    allocator: std.mem.Allocator,
+    ctx: Context,
+    iface_name: []const u8,
+) !std.ArrayList(MethodMeta) {
+    var result = std.ArrayList(MethodMeta).empty;
+    const iface_row = findTypeDefRow(ctx, iface_name) catch return result;
+    const range = try methodRange(ctx.table_info, iface_row);
+    var mi = range.start;
+    while (mi < range.end_exclusive) : (mi += 1) {
+        const m = try ctx.table_info.readMethodDef(mi);
+        const name = try ctx.heaps.getString(m.name);
+        try result.append(allocator, .{
+            .raw_name = try allocator.dupe(u8, name),
+            .norm_name = try allocator.dupe(u8, name),
+            .vtbl_sig = try allocator.dupe(u8, "VtblPlaceholder"),
+            .wrapper_sig = try allocator.dupe(u8, ""),
+            .wrapper_call = try allocator.dupe(u8, ""),
+            .raw_wrapper_sig = try allocator.dupe(u8, ""),
+            .raw_wrapper_call = try allocator.dupe(u8, ""),
+        });
+    }
+    return result;
+}
+
 pub fn identifyTypeCategory(ctx: Context, type_row: u32) !TypeCategory {
     const td = try ctx.table_info.readTypeDef(type_row);
     if ((td.flags & 0x00000020) != 0) return .interface;
@@ -794,12 +1104,12 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
         0x0e => try allocator.dupe(u8, "[*]const u16"),
         0x10 => blk: {
             const inner = try decodeSigType(allocator, ctx, c, is_winrt_iface) orelse break :blk null;
-            defer if (!isBuiltinType(inner)) allocator.free(inner);
+            defer allocator.free(inner);
             break :blk try std.fmt.allocPrint(allocator, "*{s}", .{inner});
         },
         0x0f => blk: {
             const inner = try decodeSigType(allocator, ctx, c, is_winrt_iface) orelse break :blk null;
-            defer if (!isBuiltinType(inner)) allocator.free(inner);
+            defer allocator.free(inner);
             break :blk try std.fmt.allocPrint(allocator, "*{s}", .{inner});
         },
         0x1f, 0x20 => blk: {
@@ -811,7 +1121,7 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
             const tdor_idx = c.readCompressedUInt() orelse break :blk null;
             const tdor = try coded.decodeTypeDefOrRef(tdor_idx);
             const full = try resolveTypeDefOrRefNameRaw(ctx, tdor) orelse break :blk null;
-            if (std.mem.eql(u8, full, "System.Guid")) break :blk try allocator.dupe(u8, "GUID");
+            if (std.mem.eql(u8, full, "System.Guid") or std.mem.eql(u8, full, "Guid")) break :blk try allocator.dupe(u8, "GUID");
             if (std.mem.eql(u8, full, "System.IntPtr")) break :blk try allocator.dupe(u8, "isize");
             if (std.mem.eql(u8, full, "System.UIntPtr")) break :blk try allocator.dupe(u8, "usize");
             const dot = std.mem.lastIndexOfScalar(u8, full, '.');
@@ -844,7 +1154,7 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
         0x1d => blk: {
             // SZARRAY: consume element type to keep cursor aligned
             const elem = try decodeSigType(allocator, ctx, c, is_winrt_iface);
-            if (elem) |e| if (!isBuiltinType(e)) allocator.free(e);
+            if (elem) |e| allocator.free(e);
             // WinRT array return: becomes [out] uint32, [out] T* at ABI level
             // Return a marker so the caller can detect it
             break :blk try allocator.dupe(u8, "SZARRAY");
@@ -858,7 +1168,7 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
             var ga: u32 = 0;
             while (ga < gen_arg_count) : (ga += 1) {
                 const arg = try decodeSigType(allocator, ctx, c, is_winrt_iface);
-                if (arg) |a| if (!isBuiltinType(a)) allocator.free(a);
+                if (arg) |a| allocator.free(a);
             }
             // Resolve the base type name
             const tdor = try coded.decodeTypeDefOrRef(tdor_idx);
