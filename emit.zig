@@ -1121,12 +1121,18 @@ fn registerAssociatedEnumDependencies(allocator: std.mem.Allocator, ctx: Context
     }
 }
 
-/// Returns true if the interface type is importable (defined in generated output or com_native).
-/// Unknown interfaces (ICommand, IXamlMember, etc.) should use *anyopaque instead.
+/// Returns true if the interface type is importable (will be generated in the output).
+/// Any interface name that reached this point was resolved from a WinMD TypeDef,
+/// meaning it will be generated via the dependency worklist. Cross-WinMD types that
+/// could NOT be resolved were already mapped to ?*anyopaque by decodeSigType.
+/// Exceptions: types known to have no usable generated shape yet (e.g., generic
+/// instantiation fallbacks) should remain excluded.
 fn isImportableInterface(name: []const u8) bool {
-    const importable = [_][]const u8{ "IInspectable", "IVector", "IXamlType" };
-    for (importable) |iface| if (std.mem.eql(u8, name, iface)) return true;
-    return false;
+    // Exclude names that are not real interface types
+    if (!isInterfaceType(name)) return false;
+    // Generic fallback markers
+    if (std.mem.eql(u8, name, "IIterator") or std.mem.eql(u8, name, "IIterable") or std.mem.eql(u8, name, "IMap") or std.mem.eql(u8, name, "IMapView") or std.mem.eql(u8, name, "IObservableVector")) return false;
+    return true;
 }
 
 fn isInterfaceType(name: []const u8) bool {

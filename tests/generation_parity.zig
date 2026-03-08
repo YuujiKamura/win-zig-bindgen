@@ -1227,3 +1227,45 @@ test "WINUI RoutedEventHandler: no .ctor wrapper" {
     // The delegate itself should not have a .ctor wrapper method
     try std.testing.expect(std.mem.indexOf(u8, generated, "pub fn ctor(") == null);
 }
+
+// ============================================================
+// WinUI importability probes (#116)
+// These verify that interface getters/out-params return typed
+// pointers (e.g. !*ICommand) instead of !*anyopaque after
+// expanding isImportableInterface beyond the 3-entry whitelist.
+// ============================================================
+
+test "WINUI ITabView: AddTabButtonCommand returns typed !*ICommand, not anyopaque" {
+    // Use page_allocator: ITabView has a large dependency closure that triggers
+    // pre-existing leaks in emitInterface's seen_method_names hashmap.
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "ITabView") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // With expanded importability, AddTabButtonCommand should return !*ICommand
+    try std.testing.expect(std.mem.indexOf(u8, generated, "!*ICommand") != null);
+}
+
+test "WINUI ITabView: GetExtensionInstance returns typed !*IDataTemplateExtension" {
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "ITabView") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // Out-param path: should return !*IDataTemplateExtension, not !*anyopaque
+    try std.testing.expect(std.mem.indexOf(u8, generated, "!*IDataTemplateExtension") != null);
+}
+
+test "WINUI ITabView: TabItems returns typed !*IVector (pre-existing importable)" {
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "ITabView") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // IVector was already importable — verify no regression
+    try std.testing.expect(std.mem.indexOf(u8, generated, "!*IVector") != null);
+}
