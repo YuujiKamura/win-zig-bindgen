@@ -26,7 +26,6 @@
 Notes:
 - `winui3-sync-delegate-iids.ps1` supports `-RepoRoot`, `-ToolDir`, and `-ComPath` to avoid machine-specific absolute paths.
 - Defaults prefer sibling `../ghostty-win` when available.
-- Intentional RED parity tests for unimplemented function-generation cases (Rust case IDs 051-063) are in `tests/red_function_generation.zig` and run via `zig build test-red`.
 
 ## Single Quality Gate
 
@@ -43,15 +42,16 @@ Run this from `win-zig-bindgen`:
 - script guard tests
 
 Optional cross-repo checks (outside this repo's gate):
-1. `ghostty-win`: `pwsh -File .\scripts\winui3-delegate-iid-check.ps1`
-2. `ghostty-win`: `pwsh -File .\scripts\winui3-inspect-event-params.ps1`
-3. `win-zig-core`: `pwsh -File .\scripts\winui3-contract-run.ps1 -SkipReference -SkipExtractIids`
+1. `ghostty-win`: `pwsh -File .\scripts\winui3-contract-check.ps1 -Build`
+2. `win-zig-core`: `pwsh -File .\scripts\winui3-verify-all.ps1`
 
 If all three repos are siblings, run once from `win-zig-core`:
 
 ```powershell
 pwsh -File ..\win-zig-core\scripts\winui3-verify-all.ps1
 ```
+
+For changes under `emit.zig`, `resolver.zig`, `main.zig`, `build.zig`, `tests/generation_parity.zig`, or `scripts/winui3-*`, treat `winui3-verify-all.ps1` as the downstream acceptance gate.
 
 ## Build Options
 
