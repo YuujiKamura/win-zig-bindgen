@@ -1269,3 +1269,24 @@ test "WINUI ITabView: TabItems returns typed !*IVector (pre-existing importable)
     // IVector was already importable — verify no regression
     try std.testing.expect(std.mem.indexOf(u8, generated, "!*IVector") != null);
 }
+
+// ============================================================
+// WinUI GENERICINST probes (#119)
+// These verify that generic type arguments are preserved through
+// the GENERICINST decode path instead of being discarded.
+// ============================================================
+
+test "WINUI #119: ThemeDictionaries getter resolves GENERICINST IMap, not anyopaque" {
+    // IResourceDictionary.ThemeDictionaries returns IMap`2<IInspectable, IInspectable>.
+    // Currently GENERICINST only hard-codes IVector — IMap falls to ?*anyopaque.
+    // After fix, the wrapper should NOT return !*anyopaque for ThemeDictionaries.
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IResourceDictionary") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // ThemeDictionaries wrapper should NOT be "!*anyopaque" — it should use a resolved name
+    const bad = "pub fn ThemeDictionaries(self: *@This()) !*anyopaque";
+    try std.testing.expect(std.mem.indexOf(u8, generated, bad) == null);
+}

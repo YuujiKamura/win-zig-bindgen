@@ -1125,13 +1125,8 @@ fn registerAssociatedEnumDependencies(allocator: std.mem.Allocator, ctx: Context
 /// Any interface name that reached this point was resolved from a WinMD TypeDef,
 /// meaning it will be generated via the dependency worklist. Cross-WinMD types that
 /// could NOT be resolved were already mapped to ?*anyopaque by decodeSigType.
-/// Exceptions: types known to have no usable generated shape yet (e.g., generic
-/// instantiation fallbacks) should remain excluded.
 fn isImportableInterface(name: []const u8) bool {
-    // Exclude names that are not real interface types
     if (!isInterfaceType(name)) return false;
-    // Generic fallback markers
-    if (std.mem.eql(u8, name, "IIterator") or std.mem.eql(u8, name, "IIterable") or std.mem.eql(u8, name, "IMap") or std.mem.eql(u8, name, "IMapView") or std.mem.eql(u8, name, "IObservableVector")) return false;
     return true;
 }
 
@@ -1699,29 +1694,54 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
             _ = c.readByte() orelse break :blk try allocator.dupe(u8, "?*anyopaque"); // CLASS (0x12) or VALUETYPE (0x11)
             const tdor_idx = c.readCompressedUInt() orelse break :blk try allocator.dupe(u8, "?*anyopaque");
             const gen_arg_count = c.readCompressedUInt() orelse break :blk try allocator.dupe(u8, "?*anyopaque");
-            // Consume all generic type arguments to keep cursor aligned
+            // Consume generic type arguments AND register dependencies for each
             var ga: u32 = 0;
             while (ga < gen_arg_count) : (ga += 1) {
                 const arg = try decodeSigType(allocator, ctx, c, is_winrt_iface);
-                if (arg) |a| allocator.free(a);
+                if (arg) |a| {
+                    if (!std.mem.eql(u8, a, "?*anyopaque") and !isBuiltinType(a)) {
+                        try ctx.registerDependency(allocator, a);
+                    }
+                    allocator.free(a);
+                }
             }
-            // Resolve the base type name
+            // Resolve the base type using the same logic as 0x11/0x12
             const tdor = try coded.decodeTypeDefOrRef(tdor_idx);
             const full = try resolveTypeDefOrRefFullNameAlloc(allocator, ctx, tdor) orelse break :blk try allocator.dupe(u8, "?*anyopaque");
             defer allocator.free(full);
 
             try ctx.registerDependency(allocator, full);
 
-            // Strip namespace
             const dot = std.mem.lastIndexOfScalar(u8, full, '.');
             const short_raw = if (dot) |d| full[d + 1 ..] else full;
             // Strip backtick arity suffix (e.g., "IVector`1" -> "IVector")
             const backtick = std.mem.indexOfScalar(u8, short_raw, '`');
             const short = if (backtick) |bt| short_raw[0..bt] else short_raw;
-            // Check if it's a known generated or imported type
-            if (std.mem.eql(u8, short, "IVector")) {
-                break :blk try allocator.dupe(u8, "IVector");
+
+            // Try resolving via TypeDef table (same as 0x11/0x12)
+            var found_td: ?u32 = null;
+            if (tdor.table == .TypeDef) {
+                found_td = tdor.row;
+            } else {
+                found_td = resolveTypeDefOrRefToRow(ctx, tdor) catch null;
             }
+
+            if (found_td) |td_row| {
+                const cat = identifyTypeCategory(ctx, td_row) catch .other;
+                if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
+                if (cat == .struct_type) break :blk try allocator.dupe(u8, short);
+                if (cat == .interface or cat == .delegate) break :blk try allocator.dupe(u8, short);
+            }
+
+            // Cross-WinMD fallback: known types and interface-like names
+            if (std.mem.eql(u8, short, "IInspectable")) break :blk try allocator.dupe(u8, "IInspectable");
+            if (std.mem.eql(u8, short, "EventRegistrationToken")) break :blk try allocator.dupe(u8, "EventRegistrationToken");
+            if (isKnownExternalEnum(short)) break :blk try allocator.dupe(u8, "i32");
+            if (isKnownStruct(short)) break :blk try allocator.dupe(u8, short);
+            if (isInterfaceType(short) or std.mem.startsWith(u8, full, "Windows.")) {
+                break :blk try allocator.dupe(u8, short);
+            }
+
             break :blk try allocator.dupe(u8, "?*anyopaque");
         },
         else => try allocator.dupe(u8, "?*anyopaque"),

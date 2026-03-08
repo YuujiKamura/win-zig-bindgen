@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-08T20:18:25.2569388Z",
+  "generated_at": "2026-03-08T21:20:27.7831468Z",
   "winmd_version": "1.6.250108002",
   "results": [
     {
@@ -29,7 +29,7 @@
     {
       "type": "Microsoft.UI.Xaml.IWindow",
       "short_name": "IWindow",
-      "anyopaque_count": 1846,
+      "anyopaque_count": 1830,
       "placeholder_count": 451,
       "not_implemented_count": 20,
       "status": "DEGRADED"
@@ -37,7 +37,7 @@
     {
       "type": "Microsoft.UI.Xaml.IUIElement",
       "short_name": "IUIElement",
-      "anyopaque_count": 1814,
+      "anyopaque_count": 1798,
       "placeholder_count": 436,
       "not_implemented_count": 20,
       "status": "DEGRADED"
@@ -53,7 +53,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.IContentControl",
       "short_name": "IContentControl",
-      "anyopaque_count": 2205,
+      "anyopaque_count": 2185,
       "placeholder_count": 529,
       "not_implemented_count": 23,
       "status": "DEGRADED"
@@ -61,7 +61,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.IControl",
       "short_name": "IControl",
-      "anyopaque_count": 1814,
+      "anyopaque_count": 1798,
       "placeholder_count": 436,
       "not_implemented_count": 20,
       "status": "DEGRADED"
@@ -69,7 +69,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.IPanel",
       "short_name": "IPanel",
-      "anyopaque_count": 1835,
+      "anyopaque_count": 1819,
       "placeholder_count": 445,
       "not_implemented_count": 20,
       "status": "DEGRADED"
@@ -101,7 +101,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.ITextBox",
       "short_name": "ITextBox",
-      "anyopaque_count": 2333,
+      "anyopaque_count": 2311,
       "placeholder_count": 589,
       "not_implemented_count": 26,
       "status": "DEGRADED"
@@ -109,7 +109,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.ITabView",
       "short_name": "ITabView",
-      "anyopaque_count": 2471,
+      "anyopaque_count": 2451,
       "placeholder_count": 610,
       "not_implemented_count": 24,
       "status": "DEGRADED"
@@ -117,7 +117,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.ITabViewItem",
       "short_name": "ITabViewItem",
-      "anyopaque_count": 2242,
+      "anyopaque_count": 2222,
       "placeholder_count": 562,
       "not_implemented_count": 23,
       "status": "DEGRADED"
@@ -125,7 +125,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.ITabViewTabCloseRequestedEventArgs",
       "short_name": "ITabViewTabCloseRequestedEventArgs",
-      "anyopaque_count": 2242,
+      "anyopaque_count": 2222,
       "placeholder_count": 562,
       "not_implemented_count": 23,
       "status": "DEGRADED"
@@ -221,7 +221,7 @@
     {
       "type": "Microsoft.UI.Xaml.Input.IPointerRoutedEventArgs",
       "short_name": "IPointerRoutedEventArgs",
-      "anyopaque_count": 1814,
+      "anyopaque_count": 1798,
       "placeholder_count": 436,
       "not_implemented_count": 20,
       "status": "DEGRADED"
