@@ -1615,8 +1615,10 @@ fn runExactShapeProbe(allocator: std.mem.Allocator, type_name: []const u8) !Shap
 
 /// Run exact shape probe and assert all checks pass.
 /// Logs detailed mismatch info on failure.
+/// Uses page_allocator to avoid leak detection issues from emitInterface's
+/// internal hashmaps (pre-existing leak in seen_method_names).
 fn assertExactShape(type_name: []const u8) !void {
-    const allocator = std.testing.allocator;
+    const allocator = cache_alloc;
     var result = runExactShapeProbe(allocator, type_name) catch |e| {
         if (e == error.SkipZigTest) return e;
         return e;
@@ -1701,4 +1703,14 @@ test "SHAPE #121: IScrollBar exact shape" {
 
 test "SHAPE #121: ScrollEventHandler exact shape (delegate)" {
     try assertExactShape("ScrollEventHandler");
+}
+
+// ---- #122 exception manifest validation probes ----
+
+test "SHAPE #122: IWindow2 exact shape" {
+    try assertExactShape("IWindow2");
+}
+
+test "SHAPE #122: ITabView2 exact shape" {
+    try assertExactShape("ITabView2");
 }

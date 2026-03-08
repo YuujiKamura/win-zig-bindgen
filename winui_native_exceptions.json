@@ -1,5 +1,11 @@
 {
-  "reason": "Types intentionally outside the normal WinMD-covered gate. These remain hand-written in com_native.zig.",
+  "reason": "Types intentionally outside the normal WinMD-covered generation gate. Each entry is classified with an explicit reason category.",
+  "categories": {
+    "native_interop": "C++ interop header only, not in any WinMD. Must remain hand-written.",
+    "internal_abi": "Custom internal ABI type, not a public WinMD type.",
+    "cross_module": "Type exists in Windows.winmd (system WinMD), not Microsoft.UI.Xaml.winmd. Generator can resolve these as dependencies but cannot target them directly for generation.",
+    "consumer_alias": "Consumer (ghostty-win) uses an alias name for a type that IS in WinMD under its canonical name. Generator produces the canonical version correctly. Downstream migration is tracked in ghostty #59."
+  },
   "types": [
     {
       "name": "ISwapChainPanelNative",
@@ -14,6 +20,12 @@
       "why": "C++ interop header, COM/native bridge, not normal WinRT projection"
     },
     {
+      "name": "ISwapChainPanelNative2",
+      "category": "native_interop",
+      "keep_handwritten": true,
+      "why": "C++ interop header (microsoft.ui.xaml.media.dxinterop.h), not in WinMD. Extended native swap chain interface."
+    },
+    {
       "name": "IApplicationAbi",
       "category": "internal_abi",
       "keep_handwritten": true,
@@ -23,49 +35,47 @@
       "name": "IVector",
       "category": "cross_module",
       "keep_handwritten": true,
-      "why": "Windows.Foundation.Collections.IVector<IInspectable> — in Windows.Foundation.winmd, not Microsoft.UI.Xaml.winmd. Cross-module reference support needed first."
+      "why": "Windows.Foundation.Collections.IVector<IInspectable> — in Windows.winmd. Resolved as dependency via companion metadata (#120), but findTypeDefRow cannot target companion types directly for standalone generation."
     },
     {
       "name": "IPropertyValue",
       "category": "cross_module",
       "keep_handwritten": true,
-      "why": "Windows.Foundation.IPropertyValue — in system WinMD, not Microsoft.UI.Xaml.winmd"
+      "why": "Windows.Foundation.IPropertyValue — in Windows.winmd. Same limitation as IVector."
     },
     {
       "name": "IPropertyValueStatics",
       "category": "cross_module",
       "keep_handwritten": true,
-      "why": "Windows.Foundation.IPropertyValueStatics — in system WinMD, not Microsoft.UI.Xaml.winmd"
-    },
-    {
-      "name": "ISwapChainPanelNative2",
-      "category": "native_interop",
-      "keep_handwritten": true,
-      "why": "C++ interop header (microsoft.ui.xaml.media.dxinterop.h), not in WinMD. Extended native swap chain interface."
-    },
-    {
-      "name": "IWindow2",
-      "category": "numbered_extension",
-      "keep_handwritten": true,
-      "why": "Present in WinMD but numbered extension interface (Microsoft.UI.Xaml.IWindow2). Bindgen does not yet produce correct vtable offset for extension interfaces; keep hand-written until #114+."
-    },
-    {
-      "name": "ITabView2",
-      "category": "numbered_extension",
-      "keep_handwritten": true,
-      "why": "Present in WinMD but numbered extension interface (Microsoft.UI.Xaml.Controls.ITabView2). Bindgen does not yet produce correct vtable offset for extension interfaces; keep hand-written until #114+."
+      "why": "Windows.Foundation.IPropertyValueStatics — in Windows.winmd. Same limitation as IVector."
     },
     {
       "name": "IFrameworkElement2",
-      "category": "numbered_extension",
-      "keep_handwritten": true,
-      "why": "Present in WinMD but numbered extension interface (Microsoft.UI.Xaml.IFrameworkElement2). Bindgen does not yet produce correct vtable offset for extension interfaces; keep hand-written until #114+."
+      "category": "consumer_alias",
+      "keep_handwritten": false,
+      "canonical_name": "IFrameworkElement",
+      "why": "ghostty-win alias for IFrameworkElement (IID fe08f13d). IFrameworkElement exists in Xaml WinMD and generates correctly. 'IFrameworkElement2' does not exist in WinMD — it is a consumer naming convention. Downstream migration: ghostty #59."
     },
     {
       "name": "IPanel2",
-      "category": "numbered_extension",
-      "keep_handwritten": true,
-      "why": "Present in WinMD but numbered extension interface (Microsoft.UI.Xaml.Controls.IPanel2). Bindgen does not yet produce correct vtable offset for extension interfaces; keep hand-written until #114+."
+      "category": "consumer_alias",
+      "keep_handwritten": false,
+      "canonical_name": "IPanel",
+      "why": "ghostty-win alias for IPanel. IPanel exists in Xaml WinMD and generates correctly. 'IPanel2' does not exist in WinMD — it is a consumer naming convention. Downstream migration: ghostty #59."
+    }
+  ],
+  "removed": [
+    {
+      "name": "IWindow2",
+      "was_category": "numbered_extension",
+      "removed_in": "#122",
+      "reason": "IWindow2 exists in Xaml WinMD (Microsoft.UI.Xaml.IWindow2). Generator produces correct vtable with IID, all methods, and wrappers. Verified by SHAPE #122 exact shape probe. The original 'vtable offset' concern was unfounded — each interface has its own independent vtable."
+    },
+    {
+      "name": "ITabView2",
+      "was_category": "numbered_extension",
+      "removed_in": "#122",
+      "reason": "ITabView2 exists in Xaml WinMD (Microsoft.UI.Xaml.Controls.ITabView2). Generator produces correct vtable. Verified by SHAPE #122 exact shape probe."
     }
   ]
 }
