@@ -214,6 +214,8 @@ pub fn emitInterface(
     while (i < method_range_info.end_exclusive) : (i += 1) {
         const m = try ctx.table_info.readMethodDef(i);
         const name = try ctx.heaps.getString(m.name);
+        // Skip .ctor — WinRT constructors are not part of the COM vtable
+        if (std.mem.eql(u8, name, ".ctor")) continue;
         const sig_blob = try ctx.heaps.getBlob(m.signature);
         var sig_c = SigCursor{ .data = sig_blob };
         _ = sig_c.readByte();
@@ -871,6 +873,7 @@ pub fn emitInterface(
     }
     const cat = identifyTypeCategory(ctx, type_row) catch .other;
     if (cat == .delegate) {
+        // Placeholder — real delegate construction requires closure capture
         try writer.writeAll("    pub fn new() !*@This() { return error.NotImplemented; }\n");
     }
     try writer.writeAll("};\n\n");

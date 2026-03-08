@@ -1175,3 +1175,55 @@ test "WINUI IXamlReaderStatics: Load vtable out-param is typed, not anyopaque" {
     // Load wrapper should return !*IInspectable (this already works)
     try std.testing.expect(std.mem.indexOf(u8, generated, "!*IInspectable") != null);
 }
+
+// ============================================================
+// WinUI delegate probes (#115)
+// ============================================================
+
+test "WINUI ScrollEventHandler: no .ctor in vtable" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "ScrollEventHandler") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // .ctor should NOT appear in the generated delegate
+    try std.testing.expect(std.mem.indexOf(u8, generated, "ctor:") == null);
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub fn ctor(") == null);
+}
+
+test "WINUI ScrollEventHandler: has Invoke but not .ctor wrapper" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "ScrollEventHandler") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // Should have Invoke wrapper but no .ctor wrapper
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub fn invoke(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub fn ctor(") == null);
+}
+
+test "WINUI ScrollEventHandler: Invoke slot exists" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "ScrollEventHandler") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // Invoke should be in the vtable
+    try std.testing.expect(std.mem.indexOf(u8, generated, "Invoke: *const fn") != null);
+    // Wrapper should exist
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub fn invoke(") != null);
+}
+
+test "WINUI RoutedEventHandler: no .ctor wrapper" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "RoutedEventHandler") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // The delegate itself should not have a .ctor wrapper method
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub fn ctor(") == null);
+}
