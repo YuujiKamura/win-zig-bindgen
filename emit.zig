@@ -31,9 +31,17 @@ pub const Context = struct {
             }
             if (stripped.len == 0) return;
             if (isBuiltinType(stripped)) return;
-            if (std.mem.eql(u8, stripped, "EventRegistrationToken")) return;
-            if (std.mem.eql(u8, stripped, "IInspectable")) return;
-            if (std.mem.eql(u8, stripped, "IUnknown")) return;
+
+            // Check both full name and short name (after last dot) for prologue types
+            const dep_dot = std.mem.lastIndexOfScalar(u8, stripped, '.');
+            const dep_short = if (dep_dot) |d| stripped[d + 1 ..] else stripped;
+            if (std.mem.eql(u8, dep_short, "EventRegistrationToken")) return;
+            if (std.mem.eql(u8, dep_short, "IInspectable")) return;
+            if (std.mem.eql(u8, dep_short, "IUnknown")) return;
+
+            // Skip generic types with backtick arity suffix (e.g., "IVector`1", "TypedEventHandler`2")
+            // These cannot be emitted as concrete types without type parameters
+            if (std.mem.indexOfScalar(u8, stripped, '`') != null) return;
 
             const dot = std.mem.lastIndexOfScalar(u8, stripped, '.');
             const first_char = if (dot) |d| stripped[d + 1] else stripped[0];
@@ -80,6 +88,27 @@ pub fn writePrologue(writer: anytype) !void {
         \\    }
         \\};
         \\pub const HRESULT = i32;
+        \\
+    );
+    try writePrologueSharedTail(writer);
+}
+
+pub fn writePrologueWithImport(writer: anytype, winrt_import: []const u8) !void {
+    try writer.print(
+        \\//! WinUI 3 COM interface definitions for Zig.
+        \\//! GENERATED CODE - DO NOT EDIT.
+        \\const std = @import("std");
+        \\const winrt = @import("{s}");
+        \\pub const GUID = winrt.GUID;
+        \\pub const HRESULT = winrt.HRESULT;
+        \\
+    , .{winrt_import});
+    // Write the rest of the prologue (from BOOL onwards, shared with writePrologue)
+    try writePrologueSharedTail(writer);
+}
+
+fn writePrologueSharedTail(writer: anytype) !void {
+    try writer.writeAll(
         \\pub const BOOL = i32;
         \\pub const FARPROC = ?*anyopaque;
         \\pub const HSTRING = ?*anyopaque;
@@ -139,6 +168,12 @@ pub fn writePrologue(writer: anytype) !void {
         \\
         \\pub fn hrCheck(hr: HRESULT) !void {
         \\    if (hr < 0) return error.WinRTFailed;
+        \\}
+        \\
+        \\pub fn isValidComPtr(ptr: usize) bool {
+        \\    if (ptr == 0 or ptr == 0xFFFFFFFF or ptr == 0xFFFFFFFFFFFFFFFF) return false;
+        \\    if (ptr < 0x10000) return false;
+        \\    return true;
         \\}
         \\
         \\pub const IUnknown = extern struct {
@@ -488,7 +523,9 @@ pub fn emitInterface(
         if (!preserve_norm_case and norm_name.len > 0) norm_name[0] = std.ascii.toLower(norm_name[0]);
 
         var emit_raw_wrapper_alias = true;
-        if (is_getter and (isKnownStruct(wrapper_ret) or std.mem.eql(u8, wrapper_ret, "EventRegistrationToken")) and std.mem.eql(u8, norm_name, wrapper_ret)) {
+        // Check if norm_name or raw alias (norm_seed) would clash with return type name
+        const ret_base = if (std.mem.startsWith(u8, wrapper_ret, "*")) wrapper_ret[1..] else wrapper_ret;
+        if (is_getter and (std.mem.eql(u8, norm_name, ret_base) or std.mem.eql(u8, norm_seed, ret_base))) {
             const renamed = try std.fmt.allocPrint(allocator, "Get{s}", .{norm_name});
             allocator.free(norm_name);
             norm_name = renamed;
@@ -502,6 +539,17 @@ pub fn emitInterface(
             norm_name = new_norm;
         }
         try seen_norm_names.put(try allocator.dupe(u8, norm_name), norm_prev + 1);
+
+        // Check if normalized name is a Zig keyword and escape it
+        {
+            const sanitized_norm = try sanitizeIdentifier(allocator, norm_name);
+            if (!std.mem.eql(u8, sanitized_norm, norm_name)) {
+                allocator.free(norm_name);
+                norm_name = @constCast(sanitized_norm);
+            } else {
+                allocator.free(sanitized_norm);
+            }
+        }
 
         const vtbl_ret = if (is_winrt_iface) "HRESULT" else wrapper_ret;
         const vtbl_sig = try std.fmt.allocPrint(allocator, "*const fn ({s}) callconv(.winapi) {s}", .{ vtbl_params.items, vtbl_ret });
@@ -707,11 +755,21 @@ pub fn emitInterface(
                     defer ret_val_init.deinit(allocator);
                     try ret_val_init.appendSlice(allocator, ".{ ");
 
+                    var seen_field_names = std.StringHashMap(u32).init(allocator);
+                    defer seen_field_names.deinit();
                     var bi: u32 = 0;
                     while (bi < byref_count) : (bi += 1) {
                         const param_index = byref_indices.items[bi];
-                        const p_name = all_param_names.items[param_index];
+                        const p_name_raw = all_param_names.items[param_index];
                         const pvt = param_vtbl_types.items[param_index];
+                        // Deduplicate field names in return struct
+                        const field_count = seen_field_names.get(p_name_raw) orelse 0;
+                        try seen_field_names.put(p_name_raw, field_count + 1);
+                        const p_name = if (field_count > 0)
+                            try std.fmt.allocPrint(allocator, "{s}_{d}", .{ p_name_raw, field_count })
+                        else
+                            try allocator.dupe(u8, p_name_raw);
+                        defer allocator.free(p_name);
                         const inner_type = if (std.mem.startsWith(u8, pvt, "*")) pvt[1..] else pvt;
 
                         if (bi > 0) {
@@ -817,13 +875,35 @@ pub fn emitInterface(
     try writer.print("    pub const IID = GUID{{ .data1 = 0x{x:0>8}, .data2 = 0x{x:0>4}, .data3 = 0x{x:0>4}, .data4 = .{{ 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2} }} }};\n", .{ std.mem.readInt(u32, guid[0..4], .little), std.mem.readInt(u16, guid[4..6], .little), std.mem.readInt(u16, guid[6..8], .little), guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15] });
     try writer.writeAll("    lpVtbl: *const VTable,\n    pub const VTable = extern struct {\n        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,\n        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,\n        Release: *const fn (*anyopaque) callconv(.winapi) u32,\n        GetIids: VtblPlaceholder,\n        GetRuntimeClassName: VtblPlaceholder,\n        GetTrustLevel: VtblPlaceholder,\n");
     // Emit inherited parent methods (COM flat vtable: parent slots before child slots)
-    for (parent_methods.items) |m| try writer.print("        {s}: {s},\n", .{ m.raw_name, m.vtbl_sig });
-    for (required_iface_methods.items) |m| try writer.print("        {s}: {s},\n", .{ m.raw_name, m.vtbl_sig });
-    for (methods.items) |m| try writer.print("        {s}: {s},\n", .{ m.raw_name, m.vtbl_sig });
+    // Deduplicate field names: first occurrence keeps the name, duplicates become VtblPlaceholder
+    {
+        var vtbl_seen = std.StringHashMap(void).init(allocator);
+        defer {
+            var kit = vtbl_seen.keyIterator();
+            while (kit.next()) |k| allocator.free(k.*);
+            vtbl_seen.deinit();
+        }
+        var slot_idx: u32 = 0;
+        const all_method_lists = [_][]const MethodMeta{ parent_methods.items, required_iface_methods.items, methods.items };
+        for (all_method_lists) |method_list| {
+            for (method_list) |m| {
+                if (vtbl_seen.contains(m.raw_name)) {
+                    // Duplicate slot: use placeholder with unique name
+                    try writer.print("        _reserved_slot_{d}: VtblPlaceholder,\n", .{slot_idx});
+                } else {
+                    try writer.print("        {s}: {s},\n", .{ m.raw_name, m.vtbl_sig });
+                    try vtbl_seen.put(try allocator.dupe(u8, m.raw_name), {});
+                }
+                slot_idx += 1;
+            }
+        }
+    }
     try writer.writeAll("    };\n");
     // Emit required interface references (WinRT)
     for (required_ifaces.items) |iface_name| {
-        try writer.print("    pub const Requires_{s} = true; // requires {s}\n", .{ iface_name, iface_name });
+        const trimmed = std.mem.trim(u8, iface_name, " \t\r\n\x00");
+        if (trimmed.len == 0) continue;
+        try writer.print("    pub const Requires_{s} = true; // requires {s}\n", .{ trimmed, trimmed });
     }
     try writer.writeAll("    pub fn release(self: *@This()) void { comRelease(self); }\n    pub fn queryInterface(self: *@This(), comptime T: type) !*T { return comQueryInterface(self, T); }\n");
     var emitted_required_forwarders = std.StringHashMap(void).init(allocator);
@@ -870,8 +950,16 @@ pub fn emitInterface(
         }
     }
     for (methods.items) |m| {
-        try writer.print("    {s} {{ {s} }}\n", .{ m.wrapper_sig, m.wrapper_call });
-        if (m.raw_wrapper_sig.len > 0 and !std.mem.eql(u8, m.norm_name, m.raw_name)) try writer.print("    {s} {{ {s} }}\n", .{ m.raw_wrapper_sig, m.raw_wrapper_call });
+        if (!emitted_required_forwarders.contains(m.norm_name)) {
+            try writer.print("    {s} {{ {s} }}\n", .{ m.wrapper_sig, m.wrapper_call });
+            try emitted_required_forwarders.put(try allocator.dupe(u8, m.norm_name), {});
+        }
+        if (m.raw_wrapper_sig.len > 0 and !std.mem.eql(u8, m.norm_name, m.raw_name)) {
+            if (!emitted_required_forwarders.contains(m.raw_name)) {
+                try writer.print("    {s} {{ {s} }}\n", .{ m.raw_wrapper_sig, m.raw_wrapper_call });
+                try emitted_required_forwarders.put(try allocator.dupe(u8, m.raw_name), {});
+            }
+        }
     }
     const cat = identifyTypeCategory(ctx, type_row) catch .other;
     if (cat == .delegate) {
@@ -1187,7 +1275,7 @@ fn defaultInit(ty: []const u8) []const u8 {
         std.mem.eql(u8, ty, "isize") or std.mem.eql(u8, ty, "usize") or
         std.mem.eql(u8, ty, "EventRegistrationToken")) return "0";
     if (std.mem.eql(u8, ty, "GridLength")) return ".{ .Value = 0, .GridUnitType = 0 }";
-    if (std.mem.eql(u8, ty, "Color")) return ".{ .a = 0, .r = 0, .g = 0, .b = 0 }";
+    if (std.mem.eql(u8, ty, "Color")) return ".{ .A = 0, .R = 0, .G = 0, .B = 0 }";
     return "undefined";
 }
 
@@ -1473,16 +1561,15 @@ fn collectRequiredInterfaces(allocator: std.mem.Allocator, ctx: Context, type_ro
         }
         const iface_name = resolveTypeDefOrRefNameRaw(ctx, iface_tdor) catch continue;
         if (iface_name) |n| {
-            // Strip backtick arity suffix (e.g., "IAsyncOperation`1" -> "IAsyncOperation")
-            const backtick = std.mem.indexOfScalar(u8, n, '`');
-            const clean = if (backtick) |bt| n[0..bt] else n;
+            // Skip generic types (e.g., "IIterable`1") — they can't be emitted as concrete types
+            if (std.mem.indexOfScalar(u8, n, '`') != null) continue;
             if (try resolveTypeDefOrRefFullNameAlloc(allocator, ctx, iface_tdor)) |iface_full| {
                 defer allocator.free(iface_full);
                 try ctx.registerDependency(allocator, iface_full);
             } else {
-                try ctx.registerDependency(allocator, clean);
+                try ctx.registerDependency(allocator, n);
             }
-            try result.append(allocator, try allocator.dupe(u8, clean));
+            try result.append(allocator, try allocator.dupe(u8, n));
         }
     }
     return result;
@@ -1494,7 +1581,12 @@ fn appendUniqueShortName(
     name: []const u8,
 ) !void {
     const dot = std.mem.lastIndexOfScalar(u8, name, '.') orelse 0;
-    const short = if (dot > 0) name[dot + 1 ..] else name;
+    const short_raw = if (dot > 0) name[dot + 1 ..] else name;
+    // Strip backtick arity suffix (e.g., "IVector`1" -> "IVector") and trim whitespace/null
+    const backtick = std.mem.indexOfScalar(u8, short_raw, '`');
+    const short_bt = if (backtick) |bt| short_raw[0..bt] else short_raw;
+    const short = std.mem.trim(u8, short_bt, " \t\r\n\x00");
+    if (short.len == 0) return;
     for (list.items) |existing| {
         if (std.mem.eql(u8, existing, short)) return;
     }
@@ -1751,6 +1843,7 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
                 const ns_part = if (dot) |d| full[0..d] else "";
                 if (resolveTypeCategoryFromCompanions(ctx, short, ns_part)) |cat| {
                     if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
+                    if (cat == .struct_type) break :blk try allocator.dupe(u8, short);
                     if (cat == .class) {
                         // Companion class: resolve default interface in companion metadata
                         if (resolveDefaultInterfaceFullNameFromCompanions(allocator, ctx, full)) |iface_full| {
@@ -1761,24 +1854,17 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
                             break :blk try allocator.dupe(u8, iface_short);
                         }
                     }
-                    if (cat == .struct_type or cat == .interface or cat == .delegate) {
-                        break :blk try allocator.dupe(u8, short);
-                    }
+                    // For companion interfaces/delegates: use ?*anyopaque since emission may fail
+                    // (companion may have TypeRef but not TypeDef for some types)
                 }
             }
 
-            // Well-known types or cross-WinMD types not in this TypeDef table
+            // Well-known types
             if (std.mem.eql(u8, short, "IInspectable")) break :blk try allocator.dupe(u8, "IInspectable");
             if (std.mem.eql(u8, short, "IXamlType")) break :blk try allocator.dupe(u8, "IXamlType");
             if (std.mem.eql(u8, short, "EventRegistrationToken")) break :blk try allocator.dupe(u8, "EventRegistrationToken");
             if (isKnownExternalEnum(short)) break :blk try allocator.dupe(u8, "i32");
             if (isKnownStruct(short)) break :blk try allocator.dupe(u8, short);
-
-            // For cross-WinMD references, use the short name if it looks like a COM type.
-            // Covers Windows.* (Foundation, UI) and Microsoft.* (UI.Dispatching, etc.)
-            if (isInterfaceType(short) or std.mem.startsWith(u8, full, "Windows.") or std.mem.startsWith(u8, full, "Microsoft.")) {
-                break :blk try allocator.dupe(u8, short);
-            }
 
             break :blk try allocator.dupe(u8, "?*anyopaque");
         },
@@ -1815,9 +1901,16 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
 
             const dot = std.mem.lastIndexOfScalar(u8, full, '.');
             const short_raw = if (dot) |d| full[d + 1 ..] else full;
-            // Strip backtick arity suffix (e.g., "IVector`1" -> "IVector")
-            const backtick = std.mem.indexOfScalar(u8, short_raw, '`');
-            const short = if (backtick) |bt| short_raw[0..bt] else short_raw;
+            // If the base type is generic (has backtick), use ?*anyopaque since
+            // we can't emit concrete generic instantiations
+            const is_generic = std.mem.indexOfScalar(u8, short_raw, '`') != null;
+            const short = if (is_generic) short_raw[0..std.mem.indexOfScalar(u8, short_raw, '`').?] else short_raw;
+
+            if (is_generic) {
+                // Generic types like IVector`1, IMap`2, IAsyncOperation`1 can't be
+                // emitted as concrete types. Use ?*anyopaque at ABI level.
+                break :blk try allocator.dupe(u8, "?*anyopaque");
+            }
 
             // Try resolving via TypeDef table (same as 0x11/0x12)
             var found_td: ?u32 = null;
@@ -1837,7 +1930,6 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
             // Cross-WinMD companion resolution for GENERICINST
             if (found_td == null) {
                 const ns_part = if (dot) |d| full[0..d] else "";
-                // Strip backtick from name for companion lookup
                 if (resolveTypeCategoryFromCompanions(ctx, short, ns_part)) |cat| {
                     if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
                     if (cat == .struct_type or cat == .interface or cat == .delegate or cat == .class) {
@@ -1906,9 +1998,10 @@ pub fn emitClass(allocator: std.mem.Allocator, writer: anytype, ctx: Context, ty
             }
             const iface_name = resolveTypeDefOrRefNameRaw(ctx, iface_tdor) catch continue;
             if (iface_name) |n| {
-                const clean = if (std.mem.indexOfScalar(u8, n, '`')) |bt| n[0..bt] else n;
-                try ctx.registerDependency(allocator, clean);
-                try appendUniqueShortName(allocator, &ifaces_to_implement, clean);
+                // Skip generic types — can't be emitted as concrete types
+                if (std.mem.indexOfScalar(u8, n, '`') != null) continue;
+                try ctx.registerDependency(allocator, n);
+                try appendUniqueShortName(allocator, &ifaces_to_implement, n);
             }
         }
     }
@@ -1964,10 +2057,12 @@ pub fn emitClass(allocator: std.mem.Allocator, writer: anytype, ctx: Context, ty
     }
     
     for (ifaces_to_implement.items) |iface| {
+        const iface_trimmed = std.mem.trim(u8, iface, " \t\r\n\x00");
+        if (iface_trimmed.len == 0) continue;
         if (default_iface_short) |short| {
-            if (std.mem.eql(u8, iface, short)) continue;
+            if (std.mem.eql(u8, iface_trimmed, short)) continue;
         }
-        try writer.print("    pub const Requires_{s} = true; // requires {s}\n", .{ iface, iface });
+        try writer.print("    pub const Requires_{s} = true; // requires {s}\n", .{ iface_trimmed, iface_trimmed });
     }
 
     var emitted_methods = std.StringHashMap(void).init(allocator);

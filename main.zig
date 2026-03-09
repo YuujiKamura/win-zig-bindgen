@@ -260,6 +260,7 @@ pub fn main() !void {
     var winmd_path: ?[]const u8 = null;
     var deploy_path: ?[]const u8 = null;
     var no_deps = false;
+    var winrt_import: ?[]const u8 = null;
     var iface_names = zig_std.ArrayList([]const u8).empty;
     defer iface_names.deinit(allocator);
 
@@ -273,6 +274,8 @@ pub fn main() !void {
             if (i + 1 < args.len) { i += 1; deploy_path = args[i]; }
         } else if (zig_std.mem.eql(u8, args[i], "--no-deps")) {
             no_deps = true;
+        } else if (zig_std.mem.eql(u8, args[i], "--winrt-import")) {
+            if (i + 1 < args.len) { i += 1; winrt_import = args[i]; }
         }
     }
 
@@ -338,7 +341,11 @@ pub fn main() !void {
     defer out_buf.deinit(allocator);
     const writer = out_buf.writer(allocator);
 
-    try emit.writePrologue(writer);
+    if (winrt_import) |imp| {
+        try emit.writePrologueWithImport(writer, imp);
+    } else {
+        try emit.writePrologue(writer);
+    }
 
     var head: usize = 0;
     while (head < to_generate.items.len) : (head += 1) {
@@ -396,6 +403,22 @@ pub fn main() !void {
                     break;
                 }
                 if (found_companion) break;
+            }
+            if (!found_companion) {
+                // Emit a stub for unresolvable dependency types
+                const stub_short = if (zig_std.mem.lastIndexOfScalar(u8, name, '.')) |d| name[d + 1 ..] else name;
+                try writer.print("// STUB: {s} (unresolvable)\npub const {s} = extern struct {{ lpVtbl: ?*anyopaque }};\n", .{name, stub_short});
+                try generated_types.put(try allocator.dupe(u8, name), {});
+            } else {
+                // Companion found the type but may not have emitted it (e.g. category .other).
+                // Grep the output to verify; if missing, emit a stub.
+                const stub_short = if (zig_std.mem.lastIndexOfScalar(u8, name, '.')) |d| name[d + 1 ..] else name;
+                const marker = try zig_std.fmt.allocPrint(allocator, "pub const {s} ", .{stub_short});
+                defer allocator.free(marker);
+                const output_so_far = out_buf.items;
+                if (zig_std.mem.indexOf(u8, output_so_far, marker) == null) {
+                    try writer.print("// STUB: {s} (companion found but not emitted)\npub const {s} = extern struct {{ lpVtbl: ?*anyopaque }};\n", .{ name, stub_short });
+                }
             }
             continue;
         }
