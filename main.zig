@@ -389,6 +389,7 @@ pub fn main() !void {
                         .enum_type => try emit.emitEnum(allocator, writer, comp_ctx, crow),
                         .delegate => try emit.emitDelegate(allocator, writer, comp_ctx, crow),
                         .class => try emit.emitClass(allocator, writer, comp_ctx, crow),
+                        .interface => try emit.emitInterface(allocator, writer, comp_ctx, "", cname),
                         else => continue,
                     }
                     found_companion = true;

@@ -451,6 +451,10 @@ fn generateActualOutput(
                             try emit.emitClass(allocator, writer, comp_ctx, crow);
                             emitted = true;
                         },
+                        .interface => {
+                            try emit.emitInterface(allocator, writer, comp_ctx, "", cname);
+                            emitted = true;
+                        },
                         else => continue,
                     }
                     break;
@@ -1958,19 +1962,19 @@ test "WINUI #124: GridUnitType emitted as struct-with-constants" {
 // typed wrappers instead of falling back to ?*anyopaque.
 // ============================================================
 
-test "WINUI #125: IPointerRoutedEventArgs.GetCurrentPoint returns typed PointerPoint" {
+test "WINUI #125: IPointerRoutedEventArgs.GetCurrentPoint returns typed IPointerPoint" {
     const allocator = cache_alloc;
     const generated = generateWinuiOutput(allocator, "IPointerRoutedEventArgs") catch |e| {
         if (e == error.SkipZigTest) return e;
         return e;
     };
     defer allocator.free(generated);
-    // GetCurrentPoint should return !*PointerPoint, not !?*anyopaque
+    // GetCurrentPoint should return !*IPointerPoint (default interface of PointerPoint class)
     const bad = "pub fn GetCurrentPoint(";
-    const good = "!*PointerPoint";
+    const good = "!*IPointerPoint";
     // First check that the wrapper exists
     try std.testing.expect(std.mem.indexOf(u8, generated, bad) != null);
-    // Then check it returns a typed pointer
+    // Then check it returns a typed pointer to the interface (not the class)
     const wrapper_pos = std.mem.indexOf(u8, generated, bad).?;
     const wrapper_line_end = std.mem.indexOfScalarPos(u8, generated, wrapper_pos, '\n') orelse generated.len;
     const wrapper_line = generated[wrapper_pos..wrapper_line_end];
@@ -1996,6 +2000,7 @@ test "WINUI #125: PointerPoint struct emitted via dependency closure from Micros
         return e;
     };
     defer allocator.free(generated);
-    // PointerPoint should be emitted as a COM interface struct from Microsoft.UI.winmd
+    // PointerPoint class and IPointerPoint interface should both be emitted from companion WinMD
     try std.testing.expect(std.mem.indexOf(u8, generated, "pub const PointerPoint = extern struct") != null);
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub const IPointerPoint = extern struct") != null);
 }

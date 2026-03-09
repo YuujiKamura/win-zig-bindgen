@@ -1370,6 +1370,18 @@ fn resolveTypeCategoryFromCompanions(ctx: Context, ref_name: []const u8, ref_ns:
     return null;
 }
 
+/// Resolve a companion runtime class's default interface full name.
+/// Returns the full name (e.g., "Windows.UI.Input.IPointerPoint") or null if resolution fails.
+/// Caller must free the returned string.
+fn resolveDefaultInterfaceFullNameFromCompanions(allocator: std.mem.Allocator, ctx: Context, full_name: []const u8) ?[]const u8 {
+    for (ctx.companions) |comp| {
+        const rctx = resolver.Context{ .table_info = comp.table_info, .heaps = comp.heaps };
+        const iface_full = resolver.resolveDefaultInterfaceNameForRuntimeClassAlloc(rctx, allocator, full_name) catch continue;
+        return iface_full;
+    }
+    return null;
+}
+
 fn resolveTypeSpecBaseType(ctx: Context, type_spec_row: u32) !?coded.Decoded {
     const ts = ctx.table_info.readTypeSpec(type_spec_row) catch return null;
     const blob = try ctx.heaps.getBlob(ts.signature);
@@ -1714,7 +1726,24 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
                 const cat = identifyTypeCategory(ctx, td_row) catch .other;
                 if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
                 if (cat == .struct_type) break :blk try allocator.dupe(u8, short);
-                if (cat == .interface or cat == .class or cat == .delegate) break :blk try allocator.dupe(u8, short);
+                if (cat == .class) {
+                    // Runtime class: resolve to default interface name for ABI compatibility.
+                    // The emitted struct for a class delegates to its default interface's VTable,
+                    // but the interface may not be in the dependency closure. Use the interface
+                    // name directly so references resolve to the emitted interface struct.
+                    const rctx = resolver.Context{ .table_info = ctx.table_info, .heaps = ctx.heaps };
+                    if (resolver.resolveDefaultInterfaceNameForRuntimeClassAlloc(rctx, allocator, full)) |iface_full| {
+                        defer allocator.free(iface_full);
+                        try ctx.registerDependency(allocator, iface_full);
+                        const iface_dot = std.mem.lastIndexOfScalar(u8, iface_full, '.') orelse 0;
+                        const iface_short = if (iface_dot > 0) iface_full[iface_dot + 1 ..] else iface_full;
+                        break :blk try allocator.dupe(u8, iface_short);
+                    } else |_| {
+                        // Fallback: use class name as-is (e.g. for classes without default interface)
+                        break :blk try allocator.dupe(u8, short);
+                    }
+                }
+                if (cat == .interface or cat == .delegate) break :blk try allocator.dupe(u8, short);
             }
 
             // Cross-WinMD resolution: search companion metadata
@@ -1722,7 +1751,17 @@ fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, is_w
                 const ns_part = if (dot) |d| full[0..d] else "";
                 if (resolveTypeCategoryFromCompanions(ctx, short, ns_part)) |cat| {
                     if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
-                    if (cat == .struct_type or cat == .interface or cat == .delegate or cat == .class) {
+                    if (cat == .class) {
+                        // Companion class: resolve default interface in companion metadata
+                        if (resolveDefaultInterfaceFullNameFromCompanions(allocator, ctx, full)) |iface_full| {
+                            defer allocator.free(iface_full);
+                            try ctx.registerDependency(allocator, iface_full);
+                            const iface_dot = std.mem.lastIndexOfScalar(u8, iface_full, '.') orelse 0;
+                            const iface_short = if (iface_dot > 0) iface_full[iface_dot + 1 ..] else iface_full;
+                            break :blk try allocator.dupe(u8, iface_short);
+                        }
+                    }
+                    if (cat == .struct_type or cat == .interface or cat == .delegate) {
                         break :blk try allocator.dupe(u8, short);
                     }
                 }
