@@ -1,67 +1,62 @@
 {
   "reason": "Types intentionally outside the normal WinMD-covered generation gate. Each entry is classified with an explicit reason category.",
   "categories": {
-    "native_interop": "C++ interop header only, not in any WinMD. Must remain hand-written.",
-    "internal_abi": "Custom internal ABI type, not a public WinMD type.",
-    "cross_module": "Type exists in Windows.winmd (system WinMD), not Microsoft.UI.Xaml.winmd. Generator can resolve these as dependencies but cannot target them directly for generation.",
-    "consumer_alias": "Consumer (ghostty-win) uses an alias name for a type that IS in WinMD under its canonical name. Generator produces the canonical version correctly. Downstream migration is tracked in ghostty #59."
+    "native_interop": "C++ interop header only, not in any WinMD. Must remain hand-written. True permanent.",
+    "internal_abi": "Custom internal ABI type, not a public WinMD type. True permanent.",
+    "cross_module": "Type exists in Windows.winmd (system WinMD), not in consumer-generated set. Generator can resolve as dependency but not target directly. Current-keep, not worth chasing now."
   },
   "types": [
     {
       "name": "ISwapChainPanelNative",
       "category": "native_interop",
       "keep_handwritten": true,
+      "permanent": true,
       "why": "C++ interop header (microsoft.ui.xaml.hosting.h), not in WinMD"
     },
     {
       "name": "IWindowNative",
       "category": "native_interop",
       "keep_handwritten": true,
-      "why": "C++ interop header, COM/native bridge, not normal WinRT projection"
+      "permanent": true,
+      "why": "C++ interop header, COM/native bridge for HWND access, not normal WinRT projection"
     },
     {
       "name": "ISwapChainPanelNative2",
       "category": "native_interop",
       "keep_handwritten": true,
+      "permanent": true,
       "why": "C++ interop header (microsoft.ui.xaml.media.dxinterop.h), not in WinMD. Extended native swap chain interface."
     },
     {
       "name": "IApplicationAbi",
       "category": "internal_abi",
       "keep_handwritten": true,
-      "why": "Internal ABI for Application.Resources access, not a public WinMD type"
+      "permanent": true,
+      "why": "Internal ABI for Application.Resources access, non-standard vtable, not a public WinMD type"
     },
     {
       "name": "IVector",
       "category": "cross_module",
       "keep_handwritten": true,
-      "why": "Windows.Foundation.Collections.IVector<IInspectable> — in Windows.winmd. Resolved as dependency via companion metadata (#120), but findTypeDefRow cannot target companion types directly for standalone generation."
+      "permanent": false,
+      "why": "Windows.Foundation.Collections.IVector<IInspectable> — generic type in Windows.winmd. Generator cannot emit generic instantiations. Movable when generator gains generic collection support.",
+      "blocked_by": "generic collection emission (win-zig-bindgen #119 backlog)"
     },
     {
       "name": "IPropertyValue",
       "category": "cross_module",
       "keep_handwritten": true,
-      "why": "Windows.Foundation.IPropertyValue — in Windows.winmd. Same limitation as IVector."
+      "permanent": false,
+      "why": "Windows.Foundation.IPropertyValue — in Windows.winmd, not in consumer-generated set. Movable when generator supports targeting companion WinMD types directly.",
+      "blocked_by": "companion WinMD direct targeting"
     },
     {
       "name": "IPropertyValueStatics",
       "category": "cross_module",
       "keep_handwritten": true,
-      "why": "Windows.Foundation.IPropertyValueStatics — in Windows.winmd. Same limitation as IVector."
-    },
-    {
-      "name": "IFrameworkElement2",
-      "category": "consumer_alias",
-      "keep_handwritten": false,
-      "canonical_name": "IFrameworkElement",
-      "why": "ghostty-win alias for IFrameworkElement (IID fe08f13d). IFrameworkElement exists in Xaml WinMD and generates correctly. 'IFrameworkElement2' does not exist in WinMD — it is a consumer naming convention. Downstream migration: ghostty #59."
-    },
-    {
-      "name": "IPanel2",
-      "category": "consumer_alias",
-      "keep_handwritten": false,
-      "canonical_name": "IPanel",
-      "why": "ghostty-win alias for IPanel. IPanel exists in Xaml WinMD and generates correctly. 'IPanel2' does not exist in WinMD — it is a consumer naming convention. Downstream migration: ghostty #59."
+      "permanent": false,
+      "why": "Windows.Foundation.IPropertyValueStatics — in Windows.winmd, not in consumer-generated set. Same limitation as IPropertyValue.",
+      "blocked_by": "companion WinMD direct targeting"
     }
   ],
   "removed": [
@@ -69,13 +64,25 @@
       "name": "IWindow2",
       "was_category": "numbered_extension",
       "removed_in": "#122",
-      "reason": "IWindow2 exists in Xaml WinMD (Microsoft.UI.Xaml.IWindow2). Generator produces correct vtable with IID, all methods, and wrappers. Verified by SHAPE #122 exact shape probe. The original 'vtable offset' concern was unfounded — each interface has its own independent vtable."
+      "reason": "IWindow2 exists in Xaml WinMD (Microsoft.UI.Xaml.IWindow2). Generator produces correct vtable with IID, all methods, and wrappers. Verified by SHAPE #122 exact shape probe."
     },
     {
       "name": "ITabView2",
       "was_category": "numbered_extension",
       "removed_in": "#122",
       "reason": "ITabView2 exists in Xaml WinMD (Microsoft.UI.Xaml.Controls.ITabView2). Generator produces correct vtable. Verified by SHAPE #122 exact shape probe."
+    },
+    {
+      "name": "IFrameworkElement2",
+      "was_category": "consumer_alias",
+      "removed_in": "#122 (Batch 3)",
+      "reason": "Consumer naming convention, not a WinMD type. ghostty-win migrated to canonical IFrameworkElement in Batch 3 (ghostty #59). No longer referenced in consumer code."
+    },
+    {
+      "name": "IPanel2",
+      "was_category": "consumer_alias",
+      "removed_in": "#122 (Batch 3)",
+      "reason": "Consumer naming convention, not a WinMD type. ghostty-win migrated to canonical IPanel in Batch 3 (ghostty #59). No longer referenced in consumer code."
     }
   ]
 }
