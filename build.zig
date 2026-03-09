@@ -96,6 +96,231 @@ pub fn build(b: *std.Build) void {
     const test_gen_parity_step = b.step("test-gen-parity", "Run generation parity tests");
     test_gen_parity_step.dependOn(&run_gen_parity.step);
 
+    const gen_winui_bin = b.addTest(.{
+        .name = "test-gen-winui",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{"WINUI"},
+    });
+    gen_winui_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_winui_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_winui = b.addRunArtifact(gen_winui_bin);
+    const test_gen_winui_step = b.step("test-gen-winui", "Run WinUI generation parity probes");
+    test_gen_winui_step.dependOn(&run_gen_winui.step);
+
+    const gen_shape_bin = b.addTest(.{
+        .name = "test-gen-shape",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{"SHAPE"},
+    });
+    gen_shape_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_shape_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_shape = b.addRunArtifact(gen_shape_bin);
+    const test_gen_shape_step = b.step("test-gen-shape", "Run WinUI exact-shape probes");
+    test_gen_shape_step.dependOn(&run_gen_shape.step);
+
+    const gen_enum_bin = b.addTest(.{
+        .name = "test-gen-enum",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{ " enum_", "derive_enum" },
+    });
+    gen_enum_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_enum_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_enum = b.addRunArtifact(gen_enum_bin);
+    const test_gen_enum_step = b.step("test-gen-enum", "Run enum-focused generation parity tests");
+    test_gen_enum_step.dependOn(&run_gen_enum.step);
+
+    const gen_struct_bin = b.addTest(.{
+        .name = "test-gen-struct",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{ " struct_", "derive_struct" },
+    });
+    gen_struct_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_struct_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_struct = b.addRunArtifact(gen_struct_bin);
+    const test_gen_struct_step = b.step("test-gen-struct", "Run struct-focused generation parity tests");
+    test_gen_struct_step.dependOn(&run_gen_struct.step);
+
+    const gen_interface_bin = b.addTest(.{
+        .name = "test-gen-interface",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{" interface" },
+    });
+    gen_interface_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_interface_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_interface = b.addRunArtifact(gen_interface_bin);
+    const test_gen_interface_step = b.step("test-gen-interface", "Run interface-focused generation parity tests");
+    test_gen_interface_step.dependOn(&run_gen_interface.step);
+
+    const gen_fn_bin = b.addTest(.{
+        .name = "test-gen-fn",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{ " fn_", "core_win", "core_sys", "window_long_", "bool_event", "bool_" },
+    });
+    gen_fn_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_fn_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_fn = b.addRunArtifact(gen_fn_bin);
+    const test_gen_fn_step = b.step("test-gen-fn", "Run function-focused generation parity tests");
+    test_gen_fn_step.dependOn(&run_gen_fn.step);
+
+    const gen_fn_core_bin = b.addTest(.{
+        .name = "test-gen-fn-core",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{ "core_win", "core_sys" },
+    });
+    gen_fn_core_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_fn_core_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_fn_core = b.addRunArtifact(gen_fn_core_bin);
+    const test_gen_fn_core_step = b.step("test-gen-fn-core", "Run core function parity tests");
+    test_gen_fn_core_step.dependOn(&run_gen_fn_core.step);
+
+    const gen_fn_basic_bin = b.addTest(.{
+        .name = "test-gen-fn-basic",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{ " fn_win", " fn_sys", "fn_associated_enum", "fn_return_void", "fn_no_return", "fn_result_void" },
+    });
+    gen_fn_basic_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_fn_basic_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_fn_basic = b.addRunArtifact(gen_fn_basic_bin);
+    const test_gen_fn_basic_step = b.step("test-gen-fn-basic", "Run non-window function parity tests");
+    test_gen_fn_basic_step.dependOn(&run_gen_fn_basic.step);
+
+    const gen_fn_basic_win_bin = b.addTest(.{
+        .name = "test-gen-fn-basic-win",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{ " fn_win", "fn_return_void_win", "fn_no_return_win" },
+    });
+    gen_fn_basic_win_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_fn_basic_win_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_fn_basic_win = b.addRunArtifact(gen_fn_basic_win_bin);
+    const test_gen_fn_basic_win_step = b.step("test-gen-fn-basic-win", "Run non-window Win32 function parity tests");
+    test_gen_fn_basic_win_step.dependOn(&run_gen_fn_basic_win.step);
+
+    const gen_fn_basic_sys_bin = b.addTest(.{
+        .name = "test-gen-fn-basic-sys",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{ " fn_sys", "fn_return_void_sys", "fn_no_return_sys", "fn_result_void_sys" },
+    });
+    gen_fn_basic_sys_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_fn_basic_sys_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_fn_basic_sys = b.addRunArtifact(gen_fn_basic_sys_bin);
+    const test_gen_fn_basic_sys_step = b.step("test-gen-fn-basic-sys", "Run non-window system function parity tests");
+    test_gen_fn_basic_sys_step.dependOn(&run_gen_fn_basic_sys.step);
+
+    const gen_fn_associated_enum_bin = b.addTest(.{
+        .name = "test-gen-fn-associated-enum",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{"fn_associated_enum"},
+    });
+    gen_fn_associated_enum_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_fn_associated_enum_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_fn_associated_enum = b.addRunArtifact(gen_fn_associated_enum_bin);
+    const test_gen_fn_associated_enum_step = b.step("test-gen-fn-associated-enum", "Run associated-enum function parity tests");
+    test_gen_fn_associated_enum_step.dependOn(&run_gen_fn_associated_enum.step);
+
+    const gen_fn_window_long_bin = b.addTest(.{
+        .name = "test-gen-fn-window-long",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{"window_long_"},
+    });
+    gen_fn_window_long_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_fn_window_long_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_fn_window_long = b.addRunArtifact(gen_fn_window_long_bin);
+    const test_gen_fn_window_long_step = b.step("test-gen-fn-window-long", "Run window-long parity tests");
+    test_gen_fn_window_long_step.dependOn(&run_gen_fn_window_long.step);
+
+    const gen_fn_window_long_get_bin = b.addTest(.{
+        .name = "test-gen-fn-window-long-get",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{"window_long_get"},
+    });
+    gen_fn_window_long_get_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_fn_window_long_get_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_fn_window_long_get = b.addRunArtifact(gen_fn_window_long_get_bin);
+    const test_gen_fn_window_long_get_step = b.step("test-gen-fn-window-long-get", "Run window-long getter parity tests");
+    test_gen_fn_window_long_get_step.dependOn(&run_gen_fn_window_long_get.step);
+
+    const gen_fn_window_long_set_bin = b.addTest(.{
+        .name = "test-gen-fn-window-long-set",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{"window_long_set"},
+    });
+    gen_fn_window_long_set_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_fn_window_long_set_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_fn_window_long_set = b.addRunArtifact(gen_fn_window_long_set_bin);
+    const test_gen_fn_window_long_set_step = b.step("test-gen-fn-window-long-set", "Run window-long setter parity tests");
+    test_gen_fn_window_long_set_step.dependOn(&run_gen_fn_window_long_set.step);
+
+    const gen_fn_bool_bin = b.addTest(.{
+        .name = "test-gen-fn-bool",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/generation_parity.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+        .filters = &.{ "bool_", "bool_event" },
+    });
+    gen_fn_bool_bin.root_module.addImport("winmd2zig_main", main_module);
+    gen_fn_bool_bin.root_module.addImport("win_zig_metadata", metadata_module);
+    const run_gen_fn_bool = b.addRunArtifact(gen_fn_bool_bin);
+    const test_gen_fn_bool_step = b.step("test-gen-fn-bool", "Run bool-returning function parity tests");
+    test_gen_fn_bool_step.dependOn(&run_gen_fn_bool.step);
+
     const test_all_step = b.step("test-all", "Run unit tests, audit, and parity suites");
     test_all_step.dependOn(test_step);
     test_all_step.dependOn(audit_step);

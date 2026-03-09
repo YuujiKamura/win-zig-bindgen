@@ -31,7 +31,6 @@ pub const Context = struct {
             }
             if (stripped.len == 0) return;
             if (isBuiltinType(stripped)) return;
-            if (isKnownStruct(stripped)) return;
             if (std.mem.eql(u8, stripped, "EventRegistrationToken")) return;
             if (std.mem.eql(u8, stripped, "IInspectable")) return;
             if (std.mem.eql(u8, stripped, "IUnknown")) return;
@@ -513,8 +512,8 @@ pub fn emitInterface(
 
         if (is_getter) {
             const iface_inner = if (std.mem.startsWith(u8, wrapper_ret, "*")) wrapper_ret[1..] else wrapper_ret;
-            const is_iface_getter = std.mem.startsWith(u8, wrapper_ret, "*") and isInterfaceType(iface_inner);
-            const is_importable_iface = is_iface_getter and isImportableInterface(iface_inner);
+            const is_iface_getter = std.mem.startsWith(u8, wrapper_ret, "*") and (isInterfaceType(iface_inner) or isComObjectType(ctx, iface_inner));
+            const is_importable_iface = is_iface_getter;
             const is_nullable_getter = (std.mem.eql(u8, type_name, "IWindow") or std.mem.eql(u8, type_name, "IContentControl")) and std.mem.eql(u8, name, "get_Content");
 
             if (is_nullable_getter) {
@@ -677,14 +676,13 @@ pub fn emitInterface(
                     // Single out-param: return it directly
                     const out_type = param_vtbl_types.items[byref_indices.items[0]];
                     const inner_type = if (std.mem.startsWith(u8, out_type, "*")) out_type[1..] else out_type;
-                    // Get logical type for interface detection
+                    // Get logical type for interface/class detection
                     const logical_type = param_logical_types.items[byref_indices.items[0]];
                     const logical_inner = if (std.mem.startsWith(u8, logical_type, "*")) logical_type[1..] else logical_type;
-                    const is_iface_out = isInterfaceType(logical_inner);
-                    const is_importable = is_iface_out and isImportableInterface(logical_inner);
+                    const is_com_out = isInterfaceType(logical_inner) or isComObjectType(ctx, logical_inner);
 
-                    if (is_importable) {
-                        // Known importable interface out-param: return typed pointer with ptrCast
+                    if (is_com_out) {
+                        // COM object out-param (interface or class): return typed pointer with ptrCast
                         wrapper_sig = try std.fmt.allocPrint(allocator, "pub fn {s}(self: *@This(){s}) !*{s}", .{ norm_name, out_wrapper_params.items, logical_inner });
                         wrapper_call = try std.fmt.allocPrint(
                             allocator,
@@ -891,9 +889,11 @@ pub fn emitEnum(_: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u
     // Detect underlying type from value__ field signature
     const backing_type = detectEnumBackingType(ctx, range) catch "i32";
     const is_signed = backing_type[0] == 'i';
-    const is_flags = hasAttribute(ctx, type_row, "FlagsAttribute") catch false;
 
-    try writer.print("pub const {s} = enum({s}) {{\n", .{ type_name, backing_type });
+    // Emit as struct-with-constants: WinRT enums pass through COM vtables
+    // as raw i32/u32, so struct constants are directly ABI-compatible
+    // without requiring @intFromEnum at every call site.
+    try writer.print("pub const {s} = struct {{\n", .{type_name});
 
     var i = range.start;
     while (i < range.end_exclusive) : (i += 1) {
@@ -921,24 +921,10 @@ pub fn emitEnum(_: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u
         }
 
         if (is_signed) {
-            try writer.print("    {s} = {d},\n", .{ name, val_i64 });
+            try writer.print("    pub const {s}: {s} = {d};\n", .{ name, backing_type, val_i64 });
         } else {
-            try writer.print("    {s} = {d},\n", .{ name, val_u64 });
+            try writer.print("    pub const {s}: {s} = {d};\n", .{ name, backing_type, val_u64 });
         }
-    }
-    try writer.writeAll("    _,\n");
-
-    if (is_flags) {
-        try writer.print(
-            \\
-            \\    pub fn toInt(self: @This()) {s} {{
-            \\        return @intFromEnum(self);
-            \\    }}
-            \\    pub fn fromInt(value: {s}) @This() {{
-            \\        return @enumFromInt(value);
-            \\    }}
-        , .{ backing_type, backing_type });
-        try writer.writeAll("\n");
     }
 
     try writer.writeAll("};\n\n");

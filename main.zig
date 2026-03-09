@@ -12,6 +12,7 @@ const sdk_discovery = @import("sdk_discovery.zig");
 pub const findWindowsKitUnionWinmdAlloc = sdk_discovery.findWindowsKitUnionWinmdAlloc;
 pub const findWin32DefaultWinmdAlloc = sdk_discovery.findWin32DefaultWinmdAlloc;
 pub const findXamlWinmdAlloc = sdk_discovery.findXamlWinmdAlloc;
+pub const findMicrosoftUiWinmdAlloc = sdk_discovery.findMicrosoftUiWinmdAlloc;
 
 pub fn hasTypeDefByNameAlloc(allocator: zig_std.mem.Allocator, winmd_path: []const u8, full_name: []const u8) !bool {
     var arena = zig_std.heap.ArenaAllocator.init(allocator);
@@ -292,9 +293,34 @@ pub fn main() !void {
 
     const table_info = try tables.parse(table_stream.data);
     const heaps = streams.Heaps{ .strings = strings_stream.data, .blob = blob_stream.data, .guid = guid_stream.data };
+    // Load companion WinMDs for cross-WinMD type resolution
+    var companion_storage: [2]emit.CompanionMetadata = undefined;
+    var companion_count: usize = 0;
+    const comp_paths = [_]?[]const u8{
+        sdk_discovery.findWindowsKitUnionWinmdAlloc(allocator) catch null,
+        sdk_discovery.findMicrosoftUiWinmdAlloc(allocator) catch null,
+    };
+    for (comp_paths) |comp_path_opt| {
+        const comp_path = comp_path_opt orelse continue;
+        const comp_data = zig_std.fs.cwd().readFileAlloc(allocator, comp_path, 1024 * 1024 * 100) catch continue;
+        const comp_pe = pe.parse(allocator, comp_data) catch continue;
+        const comp_md = metadata.parse(allocator, comp_pe) catch continue;
+        const comp_ts = if (comp_md.getStream("#~")) |s| s else if (comp_md.getStream("#-")) |s| s else continue;
+        const comp_ss = comp_md.getStream("#Strings") orelse continue;
+        const comp_bs = comp_md.getStream("#Blob") orelse continue;
+        const comp_gs = comp_md.getStream("#GUID") orelse continue;
+        const comp_ti = tables.parse(comp_ts.data) catch continue;
+        companion_storage[companion_count] = .{
+            .table_info = comp_ti,
+            .heaps = .{ .strings = comp_ss.data, .blob = comp_bs.data, .guid = comp_gs.data },
+        };
+        companion_count += 1;
+    }
+    const companions: []const emit.CompanionMetadata = companion_storage[0..companion_count];
+
     var dependencies = zig_std.StringHashMap(void).init(allocator);
     defer dependencies.deinit();
-    const ctx = emit.Context{ .table_info = table_info, .heaps = heaps, .dependencies = &dependencies, .allocator = allocator };
+    const ctx = emit.Context{ .table_info = table_info, .heaps = heaps, .dependencies = &dependencies, .allocator = allocator, .companions = companions };
     const rctx = resolver.Context{ .table_info = table_info, .heaps = heaps };
 
     var generated_types = zig_std.StringHashMap(void).init(allocator);
@@ -327,7 +353,51 @@ pub fn main() !void {
         else
             emit.findTypeDefRow(ctx, name) catch null;
 
-        if (type_row_opt == null) continue;
+        // Try companion WinMDs if not found in primary
+        if (type_row_opt == null) {
+            // Search companion WinMDs for this type
+            const short_name = if (zig_std.mem.lastIndexOfScalar(u8, name, '.')) |d| name[d + 1 ..] else name;
+            var found_companion = false;
+            for (companions) |comp| {
+                const t = comp.table_info.getTable(.TypeDef);
+                var crow: u32 = 1;
+                while (crow <= t.row_count) : (crow += 1) {
+                    const ctd = comp.table_info.readTypeDef(crow) catch continue;
+                    const cname = comp.heaps.getString(ctd.type_name) catch continue;
+                    if (!zig_std.mem.eql(u8, cname, short_name)) continue;
+                    const cns = comp.heaps.getString(ctd.type_namespace) catch continue;
+                    const comp_canonical = if (cns.len == 0)
+                        try allocator.dupe(u8, cname)
+                    else
+                        try zig_std.fmt.allocPrint(allocator, "{s}.{s}", .{ cns, cname });
+                    if (generated_types.contains(comp_canonical)) {
+                        allocator.free(comp_canonical);
+                        found_companion = true;
+                        break;
+                    }
+                    try generated_types.put(comp_canonical, {});
+                    const comp_ctx = emit.Context{
+                        .table_info = comp.table_info,
+                        .heaps = comp.heaps,
+                        .dependencies = &dependencies,
+                        .allocator = allocator,
+                        .companions = companions,
+                    };
+                    const comp_cat = emit.identifyTypeCategory(comp_ctx, crow) catch continue;
+                    switch (comp_cat) {
+                        .struct_type => try emit.emitStruct(allocator, writer, comp_ctx, crow),
+                        .enum_type => try emit.emitEnum(allocator, writer, comp_ctx, crow),
+                        .delegate => try emit.emitDelegate(allocator, writer, comp_ctx, crow),
+                        .class => try emit.emitClass(allocator, writer, comp_ctx, crow),
+                        else => continue,
+                    }
+                    found_companion = true;
+                    break;
+                }
+                if (found_companion) break;
+            }
+            continue;
+        }
 
         const type_row = type_row_opt.?;
         const type_def = try table_info.readTypeDef(type_row);

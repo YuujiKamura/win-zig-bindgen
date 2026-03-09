@@ -416,6 +416,50 @@ fn generateActualOutput(
             emitted_any = true;
         }
 
+        // If not found in primary contexts, search companion WinMDs
+        if (!emitted) {
+            const short_name = if (std.mem.lastIndexOfScalar(u8, filter_name, '.')) |d| filter_name[d + 1 ..] else filter_name;
+            for (win32.emit_ctx.companions) |comp| {
+                const t = comp.table_info.getTable(.TypeDef);
+                var crow: u32 = 1;
+                while (crow <= t.row_count) : (crow += 1) {
+                    const ctd = comp.table_info.readTypeDef(crow) catch continue;
+                    const cname = comp.heaps.getString(ctd.type_name) catch continue;
+                    if (!std.mem.eql(u8, cname, short_name)) continue;
+                    const comp_ctx = emit.Context{
+                        .table_info = comp.table_info,
+                        .heaps = comp.heaps,
+                        .dependencies = &deps,
+                        .allocator = allocator,
+                        .companions = win32.emit_ctx.companions,
+                    };
+                    const comp_cat = emit.identifyTypeCategory(comp_ctx, crow) catch continue;
+                    switch (comp_cat) {
+                        .struct_type => {
+                            try emit.emitStruct(allocator, writer, comp_ctx, crow);
+                            emitted = true;
+                        },
+                        .enum_type => {
+                            try emit.emitEnum(allocator, writer, comp_ctx, crow);
+                            emitted = true;
+                        },
+                        .delegate => {
+                            try emit.emitDelegate(allocator, writer, comp_ctx, crow);
+                            emitted = true;
+                        },
+                        .class => {
+                            try emit.emitClass(allocator, writer, comp_ctx, crow);
+                            emitted = true;
+                        },
+                        else => continue,
+                    }
+                    break;
+                }
+                if (emitted) break;
+            }
+            if (emitted) emitted_any = true;
+        }
+
         if (emitted) {
             // Add new dependencies from both contexts
             inline for (.{ win32, winrt }) |ctx| {
@@ -490,6 +534,15 @@ fn parseGeneratedFieldName(line: []const u8) ?[]const u8 {
 }
 
 fn parseGeneratedEnumVariantName(line: []const u8) ?[]const u8 {
+    // Struct-with-constants: "    pub const Foo: i32 = 0;"
+    if (std.mem.startsWith(u8, line, "pub const ")) {
+        const rest = line["pub const ".len..];
+        const colon = std.mem.indexOfScalar(u8, rest, ':') orelse return null;
+        const name = takeIdentifier(rest[0..colon]);
+        if (name.len == 0) return null;
+        return name;
+    }
+    // Legacy enum(i32): "    Foo = 0,"
     if (std.mem.startsWith(u8, line, "pub ")) return null;
     const eq_pos = std.mem.indexOfScalar(u8, line, '=') orelse return null;
     const name = takeIdentifier(std.mem.trim(u8, line[0..eq_pos], " \t"));
@@ -577,6 +630,16 @@ fn parseGeneratedManifest(allocator: std.mem.Allocator, text: []const u8) !Manif
         switch (t.kind) {
             .enum_type => {
                 if (parseGeneratedEnumVariantName(line)) |variant_name| try manifest.addEnumVariant(type_index, variant_name);
+            },
+            .struct_type => {
+                // Struct-with-constants: try enum variant first, then methods/fields
+                if (parseGeneratedEnumVariantName(line)) |variant_name| {
+                    try manifest.addEnumVariant(type_index, variant_name);
+                } else if (parseGeneratedFnName(line)) |method_name| {
+                    try manifest.addMethod(type_index, method_name);
+                } else if (parseGeneratedFieldName(line)) |field_name| {
+                    try manifest.addField(type_index, field_name);
+                }
             },
             else => {
                 if (parseGeneratedFnName(line)) |method_name| {
@@ -884,13 +947,19 @@ fn compareManifests(case_id: []const u8, expected: *const Manifest, actual: *con
         };
 
         if (exp_type.kind != .unknown and act_type.kind != .unknown and exp_type.kind != act_type.kind) {
-            std.log.err("[{s}] kind mismatch for {s}: expected={s} actual={s}", .{
-                case_id,
-                exp_type.name,
-                @tagName(exp_type.kind),
-                @tagName(act_type.kind),
-            });
-            fail_count += 1;
+            // Accept enum_type→struct_type mismatch: Zig emits enums as struct-with-constants
+            // (pub const Foo = struct { pub const Bar: i32 = 0; }) which parseGeneratedTypeStart
+            // classifies as struct_type. The Rust golden has newtype wrappers classified as enum_type.
+            const is_enum_to_struct = (exp_type.kind == .enum_type and act_type.kind == .struct_type);
+            if (!is_enum_to_struct) {
+                std.log.err("[{s}] kind mismatch for {s}: expected={s} actual={s}", .{
+                    case_id,
+                    exp_type.name,
+                    @tagName(exp_type.kind),
+                    @tagName(act_type.kind),
+                });
+                fail_count += 1;
+            }
         }
 
         fail_count += compareExpectedList(case_id, exp_type.name, "field", exp_type.fields.items, act_type.fields.items);
@@ -913,6 +982,9 @@ const cache_alloc = std.heap.page_allocator;
 var cached_winrt: ?GenCtx = null;
 var cached_win32: ?GenCtx = null;
 var cached_cases: ?std.json.Parsed([]Case) = null;
+var cached_case_outputs: ?std.StringHashMap([]const u8) = null;
+var cached_expected_manifests: ?std.StringHashMap(Manifest) = null;
+var cached_actual_manifests: ?std.StringHashMap(Manifest) = null;
 
 fn ensureCaches() !struct { winrt: *GenCtx, win32: *GenCtx, cases: []Case } {
     if (cached_cases == null) {
@@ -936,6 +1008,96 @@ fn ensureCaches() !struct { winrt: *GenCtx, win32: *GenCtx, cases: []Case } {
         .win32 = &cached_win32.?,
         .cases = cached_cases.?.value,
     };
+}
+
+fn buildFilterCacheKey(allocator: std.mem.Allocator, filters: []const []const u8) ![]u8 {
+    var key = std.ArrayList(u8).empty;
+    errdefer key.deinit(allocator);
+    for (filters, 0..) |filter, i| {
+        if (i != 0) try key.append(allocator, 0x1f);
+        try key.appendSlice(allocator, filter);
+    }
+    return try key.toOwnedSlice(allocator);
+}
+
+fn generateActualOutputCached(
+    allocator: std.mem.Allocator,
+    win32: *GenCtx,
+    winrt: *GenCtx,
+    filters: []const []const u8,
+) ![]u8 {
+    if (cached_case_outputs == null) {
+        cached_case_outputs = std.StringHashMap([]const u8).init(cache_alloc);
+    }
+    const key = try buildFilterCacheKey(allocator, filters);
+    defer allocator.free(key);
+
+    if (cached_case_outputs.?.get(key)) |cached| {
+        return try allocator.dupe(u8, cached);
+    }
+
+    const generated = try generateActualOutput(cache_alloc, win32, winrt, filters);
+    const stored_key = try cache_alloc.dupe(u8, key);
+    errdefer cache_alloc.free(stored_key);
+    errdefer cache_alloc.free(generated);
+    try cached_case_outputs.?.put(stored_key, generated);
+    return try allocator.dupe(u8, generated);
+}
+
+fn ensureGeneratedCaseOutput(
+    allocator: std.mem.Allocator,
+    win32: *GenCtx,
+    winrt: *GenCtx,
+    filters: []const []const u8,
+) ![]const u8 {
+    if (cached_case_outputs == null) {
+        cached_case_outputs = std.StringHashMap([]const u8).init(cache_alloc);
+    }
+    const key = try buildFilterCacheKey(allocator, filters);
+    defer allocator.free(key);
+
+    if (cached_case_outputs.?.get(key)) |cached| return cached;
+
+    const generated = try generateActualOutput(cache_alloc, win32, winrt, filters);
+    const stored_key = try cache_alloc.dupe(u8, key);
+    try cached_case_outputs.?.put(stored_key, generated);
+    return cached_case_outputs.?.get(stored_key).?;
+}
+
+fn ensureExpectedManifest(allocator: std.mem.Allocator, out_name: []const u8) !*const Manifest {
+    _ = allocator;
+    if (cached_expected_manifests == null) {
+        cached_expected_manifests = std.StringHashMap(Manifest).init(cache_alloc);
+    }
+    if (cached_expected_manifests.?.getPtr(out_name)) |manifest| return manifest;
+
+    const golden_rel = try std.fmt.allocPrint(cache_alloc, "shadow/windows-rs/bindgen-golden/{s}", .{out_name});
+    const golden = try std.fs.cwd().readFileAlloc(cache_alloc, golden_rel, std.math.maxInt(usize));
+    const parsed = try parseRustManifest(cache_alloc, golden);
+    const key = try cache_alloc.dupe(u8, out_name);
+    try cached_expected_manifests.?.put(key, parsed);
+    return cached_expected_manifests.?.getPtr(key).?;
+}
+
+fn ensureActualManifest(
+    allocator: std.mem.Allocator,
+    win32: *GenCtx,
+    winrt: *GenCtx,
+    filters: []const []const u8,
+) !*const Manifest {
+    if (cached_actual_manifests == null) {
+        cached_actual_manifests = std.StringHashMap(Manifest).init(cache_alloc);
+    }
+    const key = try buildFilterCacheKey(allocator, filters);
+    defer allocator.free(key);
+
+    if (cached_actual_manifests.?.getPtr(key)) |manifest| return manifest;
+
+    const generated = try ensureGeneratedCaseOutput(allocator, win32, winrt, filters);
+    const parsed = try parseGeneratedManifest(cache_alloc, generated);
+    const stored_key = try cache_alloc.dupe(u8, key);
+    try cached_actual_manifests.?.put(stored_key, parsed);
+    return cached_actual_manifests.?.getPtr(stored_key).?;
 }
 
 fn runCase(case_id: []const u8) !void {
@@ -965,24 +1127,18 @@ fn runCase(case_id: []const u8) !void {
         .allow_nt_wait_compat = containsStr(filters.items, "NtWaitForSingleObject") and containsStr(filters.items, "WaitForSingleObjectEx"),
     };
 
-    const golden_rel = try std.fmt.allocPrint(allocator, "shadow/windows-rs/bindgen-golden/{s}", .{out_name});
-    defer allocator.free(golden_rel);
-    const golden = std.fs.cwd().readFileAlloc(allocator, golden_rel, std.math.maxInt(usize)) catch
-        return error.TestUnexpectedResult;
-    defer allocator.free(golden);
-
-    const generated = generateActualOutput(allocator, ctx.win32, ctx.winrt, filters.items) catch |err| {
+    _ = generateActualOutputCached(allocator, ctx.win32, ctx.winrt, filters.items) catch |err| {
         std.log.err("[{s}] generation failed: {s}", .{ case_id, @errorName(err) });
         return error.TestUnexpectedResult;
     };
-    defer allocator.free(generated);
 
-    var expected_manifest = try parseRustManifest(allocator, golden);
-    defer expected_manifest.deinit();
-    var actual_manifest = try parseGeneratedManifest(allocator, generated);
-    defer actual_manifest.deinit();
+    const expected_manifest = ensureExpectedManifest(allocator, out_name) catch return error.TestUnexpectedResult;
+    const actual_manifest = ensureActualManifest(allocator, ctx.win32, ctx.winrt, filters.items) catch |err| {
+        std.log.err("[{s}] actual manifest parse failed: {s}", .{ case_id, @errorName(err) });
+        return error.TestUnexpectedResult;
+    };
 
-    const fail_count = compareManifests(case_id, &expected_manifest, &actual_manifest, compare_opts);
+    const fail_count = compareManifests(case_id, expected_manifest, actual_manifest, compare_opts);
     if (fail_count > 0) {
         std.log.err("[{s}] {d} mismatches", .{ case_id, fail_count });
         return error.TestUnexpectedResult;
@@ -1107,6 +1263,7 @@ test "GEN 107 rustfmt_25" { try runCase("107"); }
 // ============================================================
 
 var cached_xaml: ?GenCtx = null;
+var cached_winui_outputs: ?std.StringHashMap([]const u8) = null;
 
 fn ensureXamlCtx() !*GenCtx {
     if (cached_xaml == null) {
@@ -1116,22 +1273,43 @@ fn ensureXamlCtx() !*GenCtx {
     return &cached_xaml.?;
 }
 
-var winrt_companion: ?[1]emit.CompanionMetadata = null;
+var winrt_companions: ?[2]emit.CompanionMetadata = null;
+var winrt_companion_count: usize = 0;
 
 fn generateWinuiOutput(allocator: std.mem.Allocator, filter: []const u8) ![]u8 {
     const xaml = try ensureXamlCtx();
-    // Load Windows.winmd as companion for cross-WinMD resolution
-    if (winrt_companion == null) {
-        const winrt_winmd = winmd2zig.findWindowsKitUnionWinmdAlloc(cache_alloc) catch {
-            return generateActualOutput(allocator, xaml, xaml, &.{filter});
-        };
-        const winrt = loadGenCtx(cache_alloc, winrt_winmd) catch {
-            return generateActualOutput(allocator, xaml, xaml, &.{filter});
-        };
-        winrt_companion = .{.{ .table_info = winrt.table_info, .heaps = winrt.heaps }};
+    if (cached_winui_outputs == null) {
+        cached_winui_outputs = std.StringHashMap([]const u8).init(cache_alloc);
     }
-    xaml.emit_ctx.companions = &winrt_companion.?;
-    return generateActualOutput(allocator, xaml, xaml, &.{filter});
+    if (cached_winui_outputs.?.get(filter)) |cached| {
+        return try allocator.dupe(u8, cached);
+    }
+    // Load companion WinMDs for cross-WinMD resolution
+    if (winrt_companions == null) {
+        winrt_companions = undefined;
+        winrt_companion_count = 0;
+        // Windows.winmd (Windows.UI.Core, Windows.Foundation, etc.)
+        if (winmd2zig.findWindowsKitUnionWinmdAlloc(cache_alloc)) |winrt_winmd| {
+            if (loadGenCtx(cache_alloc, winrt_winmd)) |winrt| {
+                winrt_companions.?[winrt_companion_count] = .{ .table_info = winrt.table_info, .heaps = winrt.heaps };
+                winrt_companion_count += 1;
+            } else |_| {}
+        } else |_| {}
+        // Microsoft.UI.winmd (Microsoft.UI.Input, etc.)
+        if (winmd2zig.findMicrosoftUiWinmdAlloc(cache_alloc)) |ui_winmd| {
+            if (loadGenCtx(cache_alloc, ui_winmd)) |ui| {
+                winrt_companions.?[winrt_companion_count] = .{ .table_info = ui.table_info, .heaps = ui.heaps };
+                winrt_companion_count += 1;
+            } else |_| {}
+        } else |_| {}
+    }
+    xaml.emit_ctx.companions = winrt_companions.?[0..winrt_companion_count];
+    const generated = try generateActualOutput(cache_alloc, xaml, xaml, &.{filter});
+    const key = try cache_alloc.dupe(u8, filter);
+    errdefer cache_alloc.free(key);
+    errdefer cache_alloc.free(generated);
+    try cached_winui_outputs.?.put(key, generated);
+    return try allocator.dupe(u8, generated);
 }
 
 test "WINUI IKeyRoutedEventArgs: Key getter uses i32, not anyopaque" {
@@ -1713,4 +1891,111 @@ test "SHAPE #122: IWindow2 exact shape" {
 
 test "SHAPE #122: ITabView2 exact shape" {
     try assertExactShape("ITabView2");
+}
+
+// ============================================================
+// #124: Value-type representation probes
+// Verify enum struct-with-constants format, cross-WinMD struct
+// emission, and dependent delegate IID resolution.
+// ============================================================
+
+test "WINUI #124: CorePhysicalKeyStatus is emitted as extern struct" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "IKeyRoutedEventArgs") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // CorePhysicalKeyStatus should be emitted from companion WinMD
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub const CorePhysicalKeyStatus = extern struct {") != null);
+    // Should have its known fields
+    try std.testing.expect(std.mem.indexOf(u8, generated, "RepeatCount: u32,") != null);
+    try std.testing.expect(std.mem.indexOf(u8, generated, "ScanCode: u32,") != null);
+}
+
+test "WINUI #124: VirtualKey is emitted as struct-with-constants, not enum" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "IKeyRoutedEventArgs") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // VirtualKey should be struct, not enum(i32)
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub const VirtualKey = struct {") != null);
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub const VirtualKey = enum(") == null);
+    // Constants should be i32
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub const None: i32 = 0;") != null);
+}
+
+test "WINUI #124: GridLength struct emitted via dependency closure" {
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IRowDefinition") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // GridLength should now be emitted from WinMD, not assumed hand-written
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub const GridLength = extern struct {") != null);
+    try std.testing.expect(std.mem.indexOf(u8, generated, "Value: f64,") != null);
+}
+
+test "WINUI #124: GridUnitType emitted as struct-with-constants" {
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IRowDefinition") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // GridUnitType should be struct-with-constants, not enum
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub const GridUnitType = struct {") != null);
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub const GridUnitType = enum(") == null);
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub const Pixel: i32 =") != null);
+}
+
+// ============================================================
+// #125: Pointer family / Microsoft.UI.Input probes
+// Verify that non-I* COM class types (PointerPoint, etc.) get
+// typed wrappers instead of falling back to ?*anyopaque.
+// ============================================================
+
+test "WINUI #125: IPointerRoutedEventArgs.GetCurrentPoint returns typed PointerPoint" {
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IPointerRoutedEventArgs") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // GetCurrentPoint should return !*PointerPoint, not !?*anyopaque
+    const bad = "pub fn GetCurrentPoint(";
+    const good = "!*PointerPoint";
+    // First check that the wrapper exists
+    try std.testing.expect(std.mem.indexOf(u8, generated, bad) != null);
+    // Then check it returns a typed pointer
+    const wrapper_pos = std.mem.indexOf(u8, generated, bad).?;
+    const wrapper_line_end = std.mem.indexOfScalarPos(u8, generated, wrapper_pos, '\n') orelse generated.len;
+    const wrapper_line = generated[wrapper_pos..wrapper_line_end];
+    try std.testing.expect(std.mem.indexOf(u8, wrapper_line, good) != null);
+}
+
+test "WINUI #125: IPointerRoutedEventArgs.GetCurrentPoint does NOT return anyopaque" {
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IPointerRoutedEventArgs") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // The wrapper must NOT return anyopaque — that's the #125 bug
+    const bad_sig = "pub fn GetCurrentPoint(self: *@This()) !*anyopaque";
+    try std.testing.expect(std.mem.indexOf(u8, generated, bad_sig) == null);
+}
+
+test "WINUI #125: PointerPoint struct emitted via dependency closure from Microsoft.UI.winmd" {
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IPointerRoutedEventArgs") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // PointerPoint should be emitted as a COM interface struct from Microsoft.UI.winmd
+    try std.testing.expect(std.mem.indexOf(u8, generated, "pub const PointerPoint = extern struct") != null);
 }
