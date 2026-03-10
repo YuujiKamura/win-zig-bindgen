@@ -87,16 +87,18 @@ pub fn collectParentMethods(allocator: std.mem.Allocator, ctx: Context, type_row
     var result = std.ArrayList(MethodMeta).empty;
     for (parent_chain.items) |entry| {
         const pfile = ctx.index.fileOf(entry.loc);
+        const parent_ctx = Context.make(ctx.index, entry.loc, ctx.dep_queue, allocator);
         const range = try metadata_nav.methodRange(pfile.table_info, entry.loc.row);
         var mi = range.start;
         while (mi < range.end_exclusive) : (mi += 1) {
             const m = try pfile.table_info.readMethodDef(mi);
             const name = try pfile.heaps.getString(m.name);
-            // Build a simple VtblPlaceholder entry for inherited methods
+            const vtbl_sig = buildMethodVtblSig(allocator, parent_ctx, pfile, m) catch
+                try allocator.dupe(u8, "VtblPlaceholder");
             try result.append(allocator, .{
                 .raw_name = try allocator.dupe(u8, name),
                 .norm_name = try allocator.dupe(u8, name),
-                .vtbl_sig = try allocator.dupe(u8, "VtblPlaceholder"),
+                .vtbl_sig = vtbl_sig,
                 .wrapper_sig = try allocator.dupe(u8, ""),
                 .wrapper_call = try allocator.dupe(u8, ""),
                 .raw_wrapper_sig = try allocator.dupe(u8, ""),
@@ -207,26 +209,13 @@ pub fn collectInterfaceMethodsByName(
         const m = try iface_file.table_info.readMethodDef(mi);
         const name = try iface_file.heaps.getString(m.name);
 
-        // Decode signature to trigger registerDependency for types used in this method
-        const sig_blob = try iface_file.heaps.getBlob(m.signature);
-        var sig_c = SigCursor{ .data = sig_blob };
-        _ = sig_c.readByte();
-        const param_count = sig_c.readCompressedUInt() orelse 0;
-        if (sig_decode.decodeSigType(allocator, iface_ctx, &sig_c, true) catch null) |ret_type| {
-            allocator.free(ret_type);
-        }
-        var p_idx: u32 = 0;
-        while (p_idx < param_count) : (p_idx += 1) {
-            _ = (sig_c.pos < sig_c.data.len and sig_c.data[sig_c.pos] == 0x10);
-            if (sig_decode.decodeSigType(allocator, iface_ctx, &sig_c, true) catch null) |p_type| {
-                allocator.free(p_type);
-            }
-        }
+        const vtbl_sig = buildMethodVtblSig(allocator, iface_ctx, iface_file, m) catch
+            try allocator.dupe(u8, "VtblPlaceholder");
 
         try result.append(allocator, .{
             .raw_name = try allocator.dupe(u8, name),
             .norm_name = try normalizeWinRtMethodName(allocator, name),
-            .vtbl_sig = try allocator.dupe(u8, "VtblPlaceholder"),
+            .vtbl_sig = vtbl_sig,
             .wrapper_sig = try allocator.dupe(u8, ""),
             .wrapper_call = try allocator.dupe(u8, ""),
             .raw_wrapper_sig = try allocator.dupe(u8, ""),
@@ -234,6 +223,73 @@ pub fn collectInterfaceMethodsByName(
         });
     }
     return result;
+}
+
+/// Build a vtbl_sig string for a method, using the same ABI logic as emit.zig.
+/// Returns e.g. "*const fn (*anyopaque, *f64) callconv(.winapi) HRESULT".
+fn buildMethodVtblSig(
+    allocator: std.mem.Allocator,
+    parent_ctx: Context,
+    pfile: *const FileEntry,
+    m: @import("win_zig_metadata").tables.MethodDefRow,
+) ![]const u8 {
+    const tp = type_predicates;
+    const sig_blob = try pfile.heaps.getBlob(m.signature);
+    var sig_c = SigCursor{ .data = sig_blob };
+    _ = sig_c.readByte(); // calling convention
+    const param_count = sig_c.readCompressedUInt() orelse return error.InvalidSignature;
+    const ret_type_opt = try sig_decode.decodeSigType(allocator, parent_ctx, &sig_c, true);
+    const ret_type_raw = ret_type_opt orelse "void";
+    defer if (ret_type_opt != null) allocator.free(ret_type_raw);
+
+    var vtbl_params = std.ArrayList(u8).empty;
+    defer vtbl_params.deinit(allocator);
+    try vtbl_params.appendSlice(allocator, "*anyopaque");
+
+    var p_idx: u32 = 0;
+    while (p_idx < param_count) : (p_idx += 1) {
+        _ = (sig_c.pos < sig_c.data.len and sig_c.data[sig_c.pos] == 0x10); // byref check (consumed by decodeSigType)
+        const p_type_opt = try sig_decode.decodeSigType(allocator, parent_ctx, &sig_c, true);
+        const p_type_raw = p_type_opt orelse "?*anyopaque";
+        defer if (p_type_opt != null) allocator.free(p_type_raw);
+
+        const p_type_vtbl = if (std.mem.eql(u8, p_type_raw, "anyopaque"))
+            try allocator.dupe(u8, "?*anyopaque")
+        else if (tp.isBuiltinType(p_type_raw))
+            try allocator.dupe(u8, p_type_raw)
+        else if (std.mem.startsWith(u8, p_type_raw, "*")) blk: {
+            const inner = p_type_raw[1..];
+            if (tp.isBuiltinType(inner) or std.mem.eql(u8, inner, "EventRegistrationToken") or tp.isKnownStruct(inner))
+                break :blk try allocator.dupe(u8, p_type_raw)
+            else
+                break :blk try allocator.dupe(u8, "*?*anyopaque");
+        } else if (std.mem.startsWith(u8, p_type_raw, "?"))
+            try allocator.dupe(u8, p_type_raw)
+        else if (tp.isKnownStruct(p_type_raw) or std.mem.eql(u8, p_type_raw, "EventRegistrationToken"))
+            try allocator.dupe(u8, p_type_raw)
+        else
+            try allocator.dupe(u8, "?*anyopaque");
+        defer allocator.free(p_type_vtbl);
+
+        try vtbl_params.appendSlice(allocator, ", ");
+        try vtbl_params.appendSlice(allocator, p_type_vtbl);
+    }
+
+    // WinRT: non-void return becomes out parameter, return type is HRESULT
+    if (!std.mem.eql(u8, ret_type_raw, "void") and !std.mem.eql(u8, ret_type_raw, "SZARRAY")) {
+        const is_known_value = tp.isBuiltinType(ret_type_raw) or tp.isKnownStruct(ret_type_raw) or std.mem.eql(u8, ret_type_raw, "EventRegistrationToken");
+        if (!is_known_value) {
+            try vtbl_params.appendSlice(allocator, ", *?*anyopaque");
+        } else {
+            const out_type = try std.fmt.allocPrint(allocator, ", *{s}", .{ret_type_raw});
+            defer allocator.free(out_type);
+            try vtbl_params.appendSlice(allocator, out_type);
+        }
+    } else if (std.mem.eql(u8, ret_type_raw, "SZARRAY")) {
+        try vtbl_params.appendSlice(allocator, ", *u32, *?*anyopaque");
+    }
+
+    return std.fmt.allocPrint(allocator, "*const fn ({s}) callconv(.winapi) HRESULT", .{vtbl_params.items});
 }
 
 // ---------------------------------------------------------------------------
