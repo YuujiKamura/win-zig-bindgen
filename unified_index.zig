@@ -269,16 +269,22 @@ pub const UnifiedIndex = struct {
     }
 
     /// Look up a type by its short (unqualified) name.
-    /// Scans all namespaces and returns the first match.
+    /// Scans all namespaces and returns the match from the lowest file_idx (primary wins).
     pub fn findByShortName(self: *const UnifiedIndex, short_name: []const u8) ?TypeLocation {
         const stripped = stripTick(short_name);
+        var best: ?TypeLocation = null;
         var ns_it = self.types.iterator();
         while (ns_it.next()) |ns_entry| {
             if (ns_entry.value_ptr.get(stripped)) |list| {
-                if (list.items.len > 0) return list.items[0];
+                if (list.items.len > 0) {
+                    const candidate = list.items[0];
+                    if (best == null or candidate.file_idx < best.?.file_idx) {
+                        best = candidate;
+                    }
+                }
             }
         }
-        return null;
+        return best;
     }
 
     /// Resolve a TypeRef row from `file` into a TypeLocation.
@@ -449,34 +455,44 @@ pub const TypeIterator = struct {
 
 pub const DependencyQueue = struct {
     index: *const UnifiedIndex,
-    seen: std.AutoHashMapUnmanaged(u48, void),
+    /// Dedup by short type name — since output uses short names, each name must appear once.
+    seen_names: std.StringHashMapUnmanaged(void),
     queue: std.ArrayListUnmanaged(TypeLocation),
     head: usize = 0,
     allocator: std.mem.Allocator,
 
     pub fn deinit(self: *DependencyQueue) void {
-        self.seen.deinit(self.allocator);
+        var it = self.seen_names.iterator();
+        while (it.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+        }
+        self.seen_names.deinit(self.allocator);
         self.queue.deinit(self.allocator);
     }
 
     pub fn init(allocator: std.mem.Allocator, index: *const UnifiedIndex) DependencyQueue {
         return .{
             .index = index,
-            .seen = .{},
+            .seen_names = .{},
             .queue = .{},
             .head = 0,
             .allocator = allocator,
         };
     }
 
-    fn packKey(loc: TypeLocation) u48 {
-        return (@as(u48, loc.file_idx) << 32) | loc.row;
-    }
-
     pub fn enqueue(self: *DependencyQueue, loc: TypeLocation) !void {
-        const key = packKey(loc);
-        if (self.seen.contains(key)) return;
-        try self.seen.put(self.allocator, key, {});
+        // Read the short type name for dedup (output uses short names).
+        const file = self.index.fileOf(loc);
+        const td = file.table_info.readTypeDef(loc.row) catch return;
+        const raw_name = file.heaps.getString(td.type_name) catch return;
+        const short = stripTick(raw_name);
+        if (short.len == 0) return;
+
+        if (self.seen_names.contains(short)) return;
+
+        const owned = try self.allocator.dupe(u8, short);
+        errdefer self.allocator.free(owned);
+        try self.seen_names.put(self.allocator, owned, {});
         try self.queue.append(self.allocator, loc);
     }
 
