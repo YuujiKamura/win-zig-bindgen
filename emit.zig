@@ -895,6 +895,26 @@ fn findDllName(ctx: Context, method_row: u32) !?[]const u8 {
     return null;
 }
 
+/// Extract a factory type name from a CustomAttribute blob (after the 0x01 0x00 prolog).
+/// Matches windows-rs: only returns a string if it looks like a fully-qualified type name
+/// (contains '.'), distinguishing ActivatableAttribute(Type, uint, string) from
+/// ActivatableAttribute(uint, string) where the first arg is NOT a type name.
+fn extractFactoryTypeFromBlob(data: []const u8) ?[]const u8 {
+    if (data.len == 0) return null;
+    var c = sig.SigCursor{ .data = data };
+    // Try to read a SerString (compressed-uint length prefix + UTF-8 bytes)
+    const len = c.readCompressedUInt() orelse return null;
+    if (len == 0 or c.pos + len > c.data.len) return null;
+    const candidate = c.data[c.pos .. c.pos + len];
+    // windows-rs: only use strings that contain '.' (fully-qualified "Namespace.TypeName")
+    if (std.mem.indexOfScalar(u8, candidate, '.') == null) return null;
+    // Validate all bytes are printable ASCII (type names don't contain control chars)
+    for (candidate) |b| {
+        if (b < 0x20 or b > 0x7e) return null;
+    }
+    return candidate;
+}
+
 pub fn emitClass(allocator: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
     const type_def = try ctx.table_info.readTypeDef(type_row);
     const type_name_raw = try ctx.heaps.getString(type_def.type_name);
@@ -960,14 +980,18 @@ pub fn emitClass(allocator: std.mem.Allocator, writer: anytype, ctx: Context, ty
             const tr_type = try ctx.table_info.readTypeRef(tr_parent.row);
             const attr_name = try ctx.heaps.getString(tr_type.type_name);
             if (std.mem.eql(u8, attr_name, "StaticAttribute") or std.mem.eql(u8, attr_name, "ActivatableAttribute")) {
+                // Extract factory type name from CustomAttribute blob.
+                // windows-rs approach: iterate args, only use Utf8 strings
+                // that contain '.' (fully-qualified type name) and resolve
+                // to an actual interface. This correctly skips the
+                // ActivatableAttribute(uint version, ...) overload which
+                // has no factory type.
                 const blob = try ctx.heaps.getBlob(ca.value);
                 if (blob.len > 3 and blob[0] == 0x01 and blob[1] == 0x00) {
-                    var c = sig.SigCursor{ .data = blob[2..] };
-                    const len = c.readCompressedUInt() orelse 0;
-                    if (len > 0 and c.pos + len <= c.data.len) {
-                        const factory_type_full = c.data[c.pos .. c.pos + len];
-                        try ctx.registerDependency(allocator, factory_type_full);
-                        try dep.appendUniqueShortName(allocator, &ifaces_to_implement, factory_type_full);
+                    const factory_name = extractFactoryTypeFromBlob(blob[2..]);
+                    if (factory_name) |name| {
+                        try ctx.registerDependency(allocator, name);
+                        try dep.appendUniqueShortName(allocator, &ifaces_to_implement, name);
                     }
                 }
             }
