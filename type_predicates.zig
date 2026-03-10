@@ -7,7 +7,7 @@ pub fn isBuiltinType(t: []const u8) bool {
 }
 
 pub fn isKnownStruct(name: []const u8) bool {
-    const structs = [_][]const u8{ "GridLength", "Color", "Point", "Size", "Rect", "Thickness", "CornerRadius", "CorePhysicalKeyStatus" };
+    const structs = [_][]const u8{ "GridLength", "Color", "Point", "Size", "Rect", "Thickness", "CornerRadius", "CorePhysicalKeyStatus", "Vector2", "Vector3", "Matrix3x2", "Matrix4x4", "Quaternion", "Plane" };
     for (structs) |s| if (std.mem.eql(u8, name, s)) return true;
     return false;
 }
@@ -66,6 +66,12 @@ pub fn defaultInit(ty: []const u8) []const u8 {
         std.mem.eql(u8, ty, "EventRegistrationToken")) return "0";
     if (std.mem.eql(u8, ty, "GridLength")) return ".{ .Value = 0, .GridUnitType = 0 }";
     if (std.mem.eql(u8, ty, "Color")) return ".{ .A = 0, .R = 0, .G = 0, .B = 0 }";
+    if (std.mem.eql(u8, ty, "Vector2")) return ".{ .X = 0, .Y = 0 }";
+    if (std.mem.eql(u8, ty, "Vector3")) return ".{ .X = 0, .Y = 0, .Z = 0 }";
+    if (std.mem.eql(u8, ty, "Quaternion")) return ".{ .X = 0, .Y = 0, .Z = 0, .W = 0 }";
+    if (std.mem.eql(u8, ty, "Matrix3x2")) return ".{ .M11 = 0, .M12 = 0, .M21 = 0, .M22 = 0, .M31 = 0, .M32 = 0 }";
+    if (std.mem.eql(u8, ty, "Matrix4x4")) return ".{ .M11 = 0, .M12 = 0, .M13 = 0, .M14 = 0, .M21 = 0, .M22 = 0, .M23 = 0, .M24 = 0, .M31 = 0, .M32 = 0, .M33 = 0, .M34 = 0, .M41 = 0, .M42 = 0, .M43 = 0, .M44 = 0 }";
+    if (std.mem.eql(u8, ty, "Plane")) return ".{ .Normal = .{ .X = 0, .Y = 0, .Z = 0 }, .D = 0 }";
     return "undefined";
 }
 
