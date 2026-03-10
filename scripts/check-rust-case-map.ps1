@@ -40,11 +40,16 @@ $blockedCount = 0
 $plannedIds = New-Object System.Collections.Generic.List[string]
 $blockedIds = New-Object System.Collections.Generic.List[string]
 
-$testLines = rg -n '^test\s+' $RepoRoot -g '*.zig' --glob '!shadow/**' --glob '!.zig-cache/**'
+$zigFiles = Get-ChildItem -Recurse -Filter '*.zig' -Path $RepoRoot |
+    Where-Object { $_.FullName -notmatch '[\\/](shadow|\.zig-cache)[\\/]' }
 $zigTests = @{}
-foreach ($line in $testLines) {
-    if ($line -match '^.*:(\d+):test\s+"([^"]+)"') {
-        $zigTests[$matches[2]] = $true
+foreach ($f in $zigFiles) {
+    $lineNum = 0
+    foreach ($line in (Get-Content -LiteralPath $f.FullName)) {
+        $lineNum++
+        if ($line -match '^test\s+"([^"]+)"') {
+            $zigTests[$matches[1]] = $true
+        }
     }
 }
 

@@ -1,276 +1,276 @@
 {
-  "generated_at": "2026-03-10T06:28:16.2119193Z",
+  "generated_at": "2026-03-10T07:04:41.9511986Z",
   "winmd_version": "1.6.250108002",
   "results": [
     {
       "type": "Microsoft.UI.Xaml.IApplicationStatics",
       "short_name": "IApplicationStatics",
-      "anyopaque_count": 6193,
-      "placeholder_count": 2672,
-      "not_implemented_count": 67,
+      "anyopaque_count": 17,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.IApplicationFactory",
       "short_name": "IApplicationFactory",
-      "anyopaque_count": 6201,
-      "placeholder_count": 2675,
-      "not_implemented_count": 67,
+      "anyopaque_count": 7,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.IApplication",
       "short_name": "IApplication",
-      "anyopaque_count": 201,
-      "placeholder_count": 94,
-      "not_implemented_count": 4,
+      "anyopaque_count": 15,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.IWindow",
       "short_name": "IWindow",
-      "anyopaque_count": 5753,
-      "placeholder_count": 2257,
-      "not_implemented_count": 58,
+      "anyopaque_count": 20,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.IUIElement",
       "short_name": "IUIElement",
-      "anyopaque_count": 5553,
-      "placeholder_count": 2150,
-      "not_implemented_count": 54,
+      "anyopaque_count": 120,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.IFrameworkElement",
       "short_name": "IFrameworkElement",
-      "anyopaque_count": 419,
-      "placeholder_count": 182,
-      "not_implemented_count": 11,
+      "anyopaque_count": 42,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.IContentControl",
       "short_name": "IContentControl",
-      "anyopaque_count": 5932,
-      "placeholder_count": 2249,
-      "not_implemented_count": 57,
+      "anyopaque_count": 18,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.IControl",
       "short_name": "IControl",
-      "anyopaque_count": 5553,
-      "placeholder_count": 2150,
-      "not_implemented_count": 54,
+      "anyopaque_count": 37,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.IPanel",
       "short_name": "IPanel",
-      "anyopaque_count": 5579,
-      "placeholder_count": 2162,
-      "not_implemented_count": 54,
+      "anyopaque_count": 14,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.IGrid",
       "short_name": "IGrid",
-      "anyopaque_count": 1531,
-      "placeholder_count": 633,
-      "not_implemented_count": 14,
+      "anyopaque_count": 8,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.IGridStatics",
       "short_name": "IGridStatics",
-      "anyopaque_count": 1977,
-      "placeholder_count": 780,
-      "not_implemented_count": 19,
+      "anyopaque_count": 46,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.IRowDefinition",
       "short_name": "IRowDefinition",
-      "anyopaque_count": 6,
-      "placeholder_count": 7,
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
-      "status": "DEGRADED"
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.ITextBox",
       "short_name": "ITextBox",
-      "anyopaque_count": 6072,
-      "placeholder_count": 2318,
-      "not_implemented_count": 60,
+      "anyopaque_count": 77,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.ITabView",
       "short_name": "ITabView",
-      "anyopaque_count": 6187,
-      "placeholder_count": 2333,
-      "not_implemented_count": 58,
+      "anyopaque_count": 76,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.ITabViewItem",
       "short_name": "ITabViewItem",
-      "anyopaque_count": 5971,
-      "placeholder_count": 2282,
-      "not_implemented_count": 57,
+      "anyopaque_count": 17,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.ITabViewTabCloseRequestedEventArgs",
       "short_name": "ITabViewTabCloseRequestedEventArgs",
-      "anyopaque_count": 5971,
-      "placeholder_count": 2282,
-      "not_implemented_count": 57,
+      "anyopaque_count": 4,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.Primitives.IRangeBase",
       "short_name": "IRangeBase",
-      "anyopaque_count": 17,
-      "placeholder_count": 13,
-      "not_implemented_count": 1,
+      "anyopaque_count": 3,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.Primitives.IScrollBar",
       "short_name": "IScrollBar",
-      "anyopaque_count": 17,
-      "placeholder_count": 13,
-      "not_implemented_count": 1,
+      "anyopaque_count": 3,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.Primitives.IScrollEventArgs",
       "short_name": "IScrollEventArgs",
-      "anyopaque_count": 6,
-      "placeholder_count": 7,
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
-      "status": "DEGRADED"
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.Primitives.IColumnDefinition",
       "short_name": "IColumnDefinition",
-      "anyopaque_count": 6,
-      "placeholder_count": 7,
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
-      "status": "DEGRADED"
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.Media.ISolidColorBrush",
       "short_name": "ISolidColorBrush",
-      "anyopaque_count": 6,
-      "placeholder_count": 7,
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
-      "status": "DEGRADED"
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.IResourceDictionary",
       "short_name": "IResourceDictionary",
-      "anyopaque_count": 137,
-      "placeholder_count": 52,
+      "anyopaque_count": 8,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Markup.IXamlMetadataProvider",
       "short_name": "IXamlMetadataProvider",
-      "anyopaque_count": 65,
-      "placeholder_count": 13,
+      "anyopaque_count": 11,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Markup.IXamlType",
       "short_name": "IXamlType",
-      "anyopaque_count": 53,
-      "placeholder_count": 10,
+      "anyopaque_count": 31,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Markup.IXamlReaderStatics",
       "short_name": "IXamlReaderStatics",
-      "anyopaque_count": 10,
-      "placeholder_count": 7,
+      "anyopaque_count": 4,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Input.IKeyRoutedEventArgs",
       "short_name": "IKeyRoutedEventArgs",
-      "anyopaque_count": 6,
-      "placeholder_count": 7,
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
-      "status": "DEGRADED"
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.Input.ICharacterReceivedRoutedEventArgs",
       "short_name": "ICharacterReceivedRoutedEventArgs",
-      "anyopaque_count": 6,
-      "placeholder_count": 7,
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
-      "status": "DEGRADED"
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.Input.IPointerRoutedEventArgs",
       "short_name": "IPointerRoutedEventArgs",
-      "anyopaque_count": 5553,
-      "placeholder_count": 2150,
-      "not_implemented_count": 54,
+      "anyopaque_count": 14,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Input.IPointerPoint",
       "short_name": "IPointerPoint",
-      "anyopaque_count": 17,
-      "placeholder_count": 13,
+      "anyopaque_count": 7,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Input.IPointerPointProperties",
       "short_name": "IPointerPointProperties",
-      "anyopaque_count": 6,
-      "placeholder_count": 7,
+      "anyopaque_count": 0,
+      "placeholder_count": 0,
       "not_implemented_count": 0,
-      "status": "DEGRADED"
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.RoutedEventHandler",
       "short_name": "RoutedEventHandler",
-      "anyopaque_count": 15,
-      "placeholder_count": 10,
+      "anyopaque_count": 6,
+      "placeholder_count": 0,
       "not_implemented_count": 1,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.SizeChangedEventHandler",
       "short_name": "SizeChangedEventHandler",
-      "anyopaque_count": 13,
-      "placeholder_count": 10,
+      "anyopaque_count": 6,
+      "placeholder_count": 0,
       "not_implemented_count": 1,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.SelectionChangedEventHandler",
       "short_name": "SelectionChangedEventHandler",
-      "anyopaque_count": 78,
-      "placeholder_count": 22,
+      "anyopaque_count": 6,
+      "placeholder_count": 0,
       "not_implemented_count": 1,
       "status": "DEGRADED"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.Primitives.ScrollEventHandler",
       "short_name": "ScrollEventHandler",
-      "anyopaque_count": 13,
-      "placeholder_count": 10,
+      "anyopaque_count": 6,
+      "placeholder_count": 0,
       "not_implemented_count": 1,
       "status": "DEGRADED"
     },
@@ -357,7 +357,7 @@
   ],
   "summary": {
     "total": 44,
-    "ok": 10,
-    "degraded": 34
+    "ok": 17,
+    "degraded": 27
   }
 }
