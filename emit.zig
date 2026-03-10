@@ -933,9 +933,11 @@ pub fn emitClass(allocator: std.mem.Allocator, writer: anytype, ctx: Context, ty
             }
             const iface_name = sig.resolveTypeDefOrRefNameRaw(ctx, iface_tdor) catch continue;
             if (iface_name) |n| {
-                if (std.mem.indexOfScalar(u8, n, '`') != null) continue;
-                try ctx.registerDependency(allocator, n);
-                try dep.appendUniqueShortName(allocator, &ifaces_to_implement, n);
+                // Strip backtick arity suffix for generic interfaces
+                const backtick = std.mem.indexOfScalar(u8, n, '`');
+                const clean_name = if (backtick) |bt| n[0..bt] else n;
+                try ctx.registerDependency(allocator, clean_name);
+                try dep.appendUniqueShortName(allocator, &ifaces_to_implement, clean_name);
             }
         }
     }

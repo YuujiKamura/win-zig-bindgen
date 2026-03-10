@@ -102,15 +102,24 @@ pub fn collectRequiredInterfaces(allocator: std.mem.Allocator, ctx: Context, typ
         }
         const iface_name = sig_decode.resolveTypeDefOrRefNameRaw(ctx, iface_tdor) catch continue;
         if (iface_name) |n| {
-            // Skip generic types (e.g., "IIterable`1") — they can't be emitted as concrete types
-            if (std.mem.indexOfScalar(u8, n, '`') != null) continue;
+            // Strip backtick arity suffix (e.g., "IIterable`1" → "IIterable")
+            const backtick = std.mem.indexOfScalar(u8, n, '`');
+            const clean_name = if (backtick) |bt| n[0..bt] else n;
             if (try sig_decode.resolveTypeDefOrRefFullNameAlloc(allocator, ctx, iface_tdor)) |iface_full| {
                 defer allocator.free(iface_full);
-                try ctx.registerDependency(allocator, iface_full);
+                // Register tick-trimmed full name
+                const full_bt = std.mem.indexOfScalar(u8, iface_full, '`');
+                if (full_bt) |bt| {
+                    const trimmed = try std.fmt.allocPrint(allocator, "{s}", .{iface_full[0..bt]});
+                    defer allocator.free(trimmed);
+                    try ctx.registerDependency(allocator, trimmed);
+                } else {
+                    try ctx.registerDependency(allocator, iface_full);
+                }
             } else {
-                try ctx.registerDependency(allocator, n);
+                try ctx.registerDependency(allocator, clean_name);
             }
-            try result.append(allocator, try allocator.dupe(u8, n));
+            try result.append(allocator, try allocator.dupe(u8, clean_name));
         }
     }
     return result;
