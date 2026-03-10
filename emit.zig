@@ -660,7 +660,9 @@ pub fn emitInterface(
             vtbl_seen.deinit();
         }
         var slot_idx: u32 = 0;
-        const all_method_lists = [_][]const MethodMeta{ parent_methods.items, required_iface_methods.items, methods.items };
+        // WinRT ABI: vtable contains ONLY own methods + IInspectable base.
+        // Required/parent interface methods are accessed via QueryInterface, not inlined.
+        const all_method_lists = [_][]const MethodMeta{methods.items};
         for (all_method_lists) |method_list| {
             for (method_list) |m| {
                 if (vtbl_seen.contains(m.raw_name)) {
