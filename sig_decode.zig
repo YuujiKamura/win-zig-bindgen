@@ -353,20 +353,27 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
             const full = try resolveTypeDefOrRefFullNameAlloc(allocator, ctx, tdor) orelse break :blk try allocator.dupe(u8, "?*anyopaque");
             defer allocator.free(full);
 
-            try ctx.registerDependency(allocator, full);
-
             const dot = std.mem.lastIndexOfScalar(u8, full, '.');
             const short_raw = if (dot) |d| full[d + 1 ..] else full;
-            // If the base type is generic (has backtick), use ?*anyopaque since
-            // we can't emit concrete generic instantiations
             const is_generic = std.mem.indexOfScalar(u8, short_raw, '`') != null;
             const short = if (is_generic) short_raw[0..std.mem.indexOfScalar(u8, short_raw, '`').?] else short_raw;
 
+            // Register dependency with tick-trimmed name so generic base types
+            // (e.g., IVector`1 → IVector) enter the generation queue
             if (is_generic) {
-                // Generic types like IVector`1, IMap`2, IAsyncOperation`1 can't be
-                // emitted as concrete types. Use ?*anyopaque at ABI level.
+                // Build tick-trimmed full name for dependency registration
+                if (dot) |d| {
+                    const trimmed_full = try std.fmt.allocPrint(allocator, "{s}.{s}", .{ full[0..d], short });
+                    defer allocator.free(trimmed_full);
+                    try ctx.registerDependency(allocator, trimmed_full);
+                } else {
+                    try ctx.registerDependency(allocator, short);
+                }
+                // ABI-level: generic instantiations are opaque pointers for now
                 break :blk try allocator.dupe(u8, "?*anyopaque");
             }
+
+            try ctx.registerDependency(allocator, full);
 
             // Try resolving via TypeDef table (same as 0x11/0x12)
             var found_td: ?u32 = null;
