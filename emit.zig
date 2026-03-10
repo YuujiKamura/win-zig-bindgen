@@ -185,17 +185,8 @@ pub fn emitInterface(
                 try wrapper_params.appendSlice(allocator, p_name);
                 try wrapper_params.appendSlice(allocator, ": ");
 
-                // Use typed interface pointer in wrapper instead of ?*anyopaque
-                const is_typed_iface = std.mem.eql(u8, p_type_vtbl, "?*anyopaque") and
-                    !std.mem.eql(u8, p_type_raw, "?*anyopaque") and
-                    !std.mem.eql(u8, p_type_raw, "anyopaque") and
-                    (tp.isInterfaceType(p_type_raw) or sig.isComObjectType(ctx, p_type_raw));
-
                 if (std.mem.eql(u8, p_type_vtbl, "HSTRING")) {
                     try wrapper_params.appendSlice(allocator, "anytype");
-                } else if (is_typed_iface) {
-                    try wrapper_params.appendSlice(allocator, "?*");
-                    try wrapper_params.appendSlice(allocator, p_type_raw);
                 } else {
                     try wrapper_params.appendSlice(allocator, p_type_vtbl);
                 }
@@ -208,11 +199,6 @@ pub fn emitInterface(
                     try call_args.appendSlice(allocator, "@ptrCast(");
                     try call_args.appendSlice(allocator, p_name);
                     try call_args.appendSlice(allocator, ")");
-                } else if (is_typed_iface) {
-                    // Cast typed interface pointer to ?*anyopaque for vtable call
-                    try call_args.appendSlice(allocator, "if (");
-                    try call_args.appendSlice(allocator, p_name);
-                    try call_args.appendSlice(allocator, ") |p| @as(?*anyopaque, @ptrCast(p)) else null");
                 } else {
                     try call_args.appendSlice(allocator, p_name);
                 }
@@ -502,18 +488,8 @@ pub fn emitInterface(
                         try out_wrapper_params.appendSlice(allocator, p_name);
                         try out_wrapper_params.appendSlice(allocator, ": ");
 
-                        // Use typed interface pointer in wrapper instead of ?*anyopaque
-                        const plt = param_logical_types.items[pi];
-                        const is_typed_input = std.mem.eql(u8, pvt, "?*anyopaque") and
-                            !std.mem.eql(u8, plt, "?*anyopaque") and
-                            !std.mem.eql(u8, plt, "anyopaque") and
-                            (tp.isInterfaceType(plt) or sig.isComObjectType(ctx, plt));
-
                         if (std.mem.eql(u8, pvt, "HSTRING")) {
                             try out_wrapper_params.appendSlice(allocator, "anytype");
-                        } else if (is_typed_input) {
-                            try out_wrapper_params.appendSlice(allocator, "?*");
-                            try out_wrapper_params.appendSlice(allocator, plt);
                         } else {
                             try out_wrapper_params.appendSlice(allocator, pvt);
                         }
@@ -523,10 +499,6 @@ pub fn emitInterface(
                             try out_call_args.appendSlice(allocator, "@ptrCast(");
                             try out_call_args.appendSlice(allocator, p_name);
                             try out_call_args.appendSlice(allocator, ")");
-                        } else if (is_typed_input) {
-                            try out_call_args.appendSlice(allocator, "if (");
-                            try out_call_args.appendSlice(allocator, p_name);
-                            try out_call_args.appendSlice(allocator, ") |p| @as(?*anyopaque, @ptrCast(p)) else null");
                         } else {
                             try out_call_args.appendSlice(allocator, p_name);
                         }
