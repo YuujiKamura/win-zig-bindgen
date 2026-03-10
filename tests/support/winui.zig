@@ -3,14 +3,19 @@
 const std = @import("std");
 const ctx = @import("context.zig");
 const emit = ctx.emit;
+const ui = ctx.winmd2zig.ui;
 
 const GenCtx = ctx.GenCtx;
 const cache_alloc = ctx.cache_alloc;
 
 var cached_xaml: ?GenCtx = null;
 var cached_winui_outputs: ?std.StringHashMap([]const u8) = null;
-var winrt_companions: ?[2]emit.CompanionMetadata = null;
-var winrt_companion_count: usize = 0;
+
+/// Companion GenCtx instances (Windows.winmd, Microsoft.UI.winmd).
+/// We keep them alive so their arenas (and thus FileEntry data) stay valid.
+var companion_ctxs: [2]GenCtx = undefined;
+var companion_count: usize = 0;
+var companions_loaded: bool = false;
 
 pub fn ensureXamlCtx() !*GenCtx {
     if (cached_xaml == null) {
@@ -18,6 +23,28 @@ pub fn ensureXamlCtx() !*GenCtx {
         cached_xaml = ctx.loadGenCtx(cache_alloc, xaml_winmd) catch return error.SkipZigTest;
     }
     return &cached_xaml.?;
+}
+
+fn ensureCompanions() void {
+    if (companions_loaded) return;
+    companions_loaded = true;
+    companion_count = 0;
+
+    // Windows.winmd (Windows.UI.Core, Windows.Foundation, etc.)
+    if (ctx.winmd2zig.findWindowsKitUnionWinmdAlloc(cache_alloc)) |winrt_winmd| {
+        if (ctx.loadGenCtx(cache_alloc, winrt_winmd)) |winrt| {
+            companion_ctxs[companion_count] = winrt;
+            companion_count += 1;
+        } else |_| {}
+    } else |_| {}
+
+    // Microsoft.UI.winmd (Microsoft.UI.Input, etc.)
+    if (ctx.winmd2zig.findMicrosoftUiWinmdAlloc(cache_alloc)) |ui_winmd| {
+        if (ctx.loadGenCtx(cache_alloc, ui_winmd)) |loaded_ui| {
+            companion_ctxs[companion_count] = loaded_ui;
+            companion_count += 1;
+        } else |_| {}
+    } else |_| {}
 }
 
 pub fn generateWinuiOutput(allocator: std.mem.Allocator, filter: []const u8) ![]u8 {
@@ -28,27 +55,25 @@ pub fn generateWinuiOutput(allocator: std.mem.Allocator, filter: []const u8) ![]
     if (cached_winui_outputs.?.get(filter)) |cached| {
         return try allocator.dupe(u8, cached);
     }
+
     // Load companion WinMDs for cross-WinMD resolution
-    if (winrt_companions == null) {
-        winrt_companions = undefined;
-        winrt_companion_count = 0;
-        // Windows.winmd (Windows.UI.Core, Windows.Foundation, etc.)
-        if (ctx.winmd2zig.findWindowsKitUnionWinmdAlloc(cache_alloc)) |winrt_winmd| {
-            if (ctx.loadGenCtx(cache_alloc, winrt_winmd)) |winrt| {
-                winrt_companions.?[winrt_companion_count] = .{ .table_info = winrt.table_info, .heaps = winrt.heaps };
-                winrt_companion_count += 1;
-            } else |_| {}
-        } else |_| {}
-        // Microsoft.UI.winmd (Microsoft.UI.Input, etc.)
-        if (ctx.winmd2zig.findMicrosoftUiWinmdAlloc(cache_alloc)) |ui_winmd| {
-            if (ctx.loadGenCtx(cache_alloc, ui_winmd)) |ui| {
-                winrt_companions.?[winrt_companion_count] = .{ .table_info = ui.table_info, .heaps = ui.heaps };
-                winrt_companion_count += 1;
-            } else |_| {}
-        } else |_| {}
+    ensureCompanions();
+
+    // Build extra file entries from companions
+    var extra_buf: [2]ui.FileEntry = undefined;
+    var extra_count: usize = 0;
+    for (companion_ctxs[0..companion_count]) |*comp| {
+        extra_buf[extra_count] = comp.file_entries[0];
+        extra_count += 1;
     }
-    xaml.emit_ctx.companions = winrt_companions.?[0..winrt_companion_count];
-    const generated = try ctx.generateActualOutput(cache_alloc, xaml, xaml, &.{filter});
+
+    const generated = try ctx.generateActualOutputWithExtras(
+        cache_alloc,
+        xaml,
+        xaml,
+        &.{filter},
+        extra_buf[0..extra_count],
+    );
     const key = try cache_alloc.dupe(u8, filter);
     errdefer cache_alloc.free(key);
     errdefer cache_alloc.free(generated);

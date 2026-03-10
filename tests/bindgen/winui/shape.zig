@@ -38,7 +38,7 @@ const WinmdTypeShape = struct {
 
 fn extractWinmdShape(allocator: std.mem.Allocator, gctx: *GenCtx, type_name: []const u8) !WinmdTypeShape {
     const row = try ctx.findExactTypeRow(gctx, type_name) orelse return error.TypeNotFound;
-    const category = try emit.identifyTypeCategory(gctx.emit_ctx, row);
+    const category = try emit.identifyTypeCategory(gctx.emitCtx(), row);
 
     const td = try gctx.table_info.readTypeDef(row);
     const method_start = td.method_list;

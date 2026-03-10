@@ -4,12 +4,12 @@ const tables = win_zig_metadata.tables;
 const streams = win_zig_metadata.streams;
 const coded = win_zig_metadata.coded_index;
 const resolver = @import("resolver.zig");
+const ui = @import("unified_index.zig");
 const context = @import("context.zig");
 const type_predicates = @import("type_predicates.zig");
 const metadata_nav = @import("metadata_nav.zig");
 
-const Context = context.Context;
-const CompanionMetadata = context.CompanionMetadata;
+const Context = ui.UnifiedContext;
 const TypeCategory = context.TypeCategory;
 const MethodRange = context.MethodRange;
 
@@ -77,6 +77,7 @@ pub fn resolveTypeDefOrRefNameRaw(ctx: Context, tdor: coded.Decoded) !?[]const u
 
 /// Resolve a TypeDefOrRef coded index to a TypeDef row in the same metadata.
 /// For TypeDef, returns the row directly. For TypeRef, searches TypeDef table by name.
+/// Falls back to unified index for cross-file resolution.
 /// Returns null if unresolvable (e.g., TypeSpec or not found).
 pub fn resolveTypeDefOrRefToRow(ctx: Context, tdor: coded.Decoded) !?u32 {
     switch (tdor.table) {
@@ -95,7 +96,15 @@ pub fn resolveTypeDefOrRefToRow(ctx: Context, tdor: coded.Decoded) !?u32 {
                 if (type_predicates.typeNameMatches(ref_name, name) and std.mem.eql(u8, ns, ref_ns)) return row;
                 if (first_name_match == null and type_predicates.typeNameMatches(ref_name, name)) first_name_match = row;
             }
-            return first_name_match;
+            if (first_name_match) |m| return m;
+
+            // Cross-file resolution via unified index
+            if (ctx.index.resolveTypeRef(ctx.file(), tdor.row)) |loc| {
+                // If the resolved type is in the same file, return the row directly
+                if (loc.file_idx == ctx.loc.file_idx) return loc.row;
+                // For cross-file types, return null — caller should use unified index directly
+            }
+            return null;
         },
         .TypeSpec => {
             const base = try resolveTypeSpecBaseType(ctx, tdor.row) orelse return null;
@@ -103,40 +112,6 @@ pub fn resolveTypeDefOrRefToRow(ctx: Context, tdor: coded.Decoded) !?u32 {
         },
         else => return null,
     }
-}
-
-/// Search companion WinMDs for a type by name and namespace.
-/// Returns the type category if found, null otherwise.
-pub fn resolveTypeCategoryFromCompanions(ctx: Context, ref_name: []const u8, ref_ns: []const u8) ?TypeCategory {
-    for (ctx.companions) |comp| {
-        const t = comp.table_info.getTable(.TypeDef);
-        var row: u32 = 1;
-        while (row <= t.row_count) : (row += 1) {
-            const td = comp.table_info.readTypeDef(row) catch continue;
-            const name = comp.heaps.getString(td.type_name) catch continue;
-            if (!type_predicates.typeNameMatches(ref_name, name)) continue;
-            const ns = comp.heaps.getString(td.type_namespace) catch continue;
-            if (!std.mem.eql(u8, ns, ref_ns)) continue;
-            const comp_ctx = Context{
-                .table_info = comp.table_info,
-                .heaps = comp.heaps,
-            };
-            return identifyTypeCategory(comp_ctx, row) catch .other;
-        }
-    }
-    return null;
-}
-
-/// Resolve a companion runtime class's default interface full name.
-/// Returns the full name (e.g., "Windows.UI.Input.IPointerPoint") or null if resolution fails.
-/// Caller must free the returned string.
-pub fn resolveDefaultInterfaceFullNameFromCompanions(allocator: std.mem.Allocator, ctx: Context, full_name: []const u8) ?[]const u8 {
-    for (ctx.companions) |comp| {
-        const rctx = resolver.Context{ .table_info = comp.table_info, .heaps = comp.heaps };
-        const iface_full = resolver.resolveDefaultInterfaceNameForRuntimeClassAlloc(rctx, allocator, full_name) catch continue;
-        return iface_full;
-    }
-    return null;
 }
 
 pub fn resolveTypeSpecBaseType(ctx: Context, type_spec_row: u32) !?coded.Decoded {
@@ -171,7 +146,7 @@ pub fn identifyTypeCategory(ctx: Context, type_row: u32) !TypeCategory {
 }
 
 /// Returns true if the resolved type name represents a COM object (interface/class/delegate)
-/// by looking it up in the TypeDef table and companion metadata.
+/// by looking it up in the TypeDef table and the unified index.
 pub fn isComObjectType(ctx: Context, name: []const u8) bool {
     if (type_predicates.isBuiltinType(name)) return false;
     if (type_predicates.isKnownStruct(name)) return false;
@@ -189,21 +164,11 @@ pub fn isComObjectType(ctx: Context, name: []const u8) bool {
         return cat == .interface or cat == .class or cat == .delegate;
     }
 
-    // Check companion metadata
-    for (ctx.companions) |comp| {
-        const ct = comp.table_info.getTable(.TypeDef);
-        var crow: u32 = 1;
-        while (crow <= ct.row_count) : (crow += 1) {
-            const td = comp.table_info.readTypeDef(crow) catch continue;
-            const td_name = comp.heaps.getString(td.type_name) catch continue;
-            if (!type_predicates.typeNameMatches(name, td_name)) continue;
-            const comp_ctx = Context{
-                .table_info = comp.table_info,
-                .heaps = comp.heaps,
-            };
-            const cat = identifyTypeCategory(comp_ctx, crow) catch continue;
-            return cat == .interface or cat == .class or cat == .delegate;
-        }
+    // Cross-file resolution via unified index
+    if (ctx.index.findByShortName(name)) |found_loc| {
+        const tmp = ui.UnifiedContext.make(ctx.index, found_loc, ctx.dep_queue, ctx.allocator);
+        const cat = identifyTypeCategory(tmp, found_loc.row) catch return false;
+        return cat == .interface or cat == .class or cat == .delegate;
     }
 
     return false;
@@ -240,7 +205,7 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
             _ = c.readCompressedUInt() orelse break :blk null;
             break :blk try decodeSigType(allocator, ctx, c, is_winrt_iface);
         },
-        0x1c => try allocator.dupe(u8, "IInspectable"), // ELEMENT_TYPE_OBJECT → System.Object → IInspectable
+        0x1c => try allocator.dupe(u8, "IInspectable"), // ELEMENT_TYPE_OBJECT -> System.Object -> IInspectable
         0x11, 0x12 => blk: {
             const tdor_idx = c.readCompressedUInt() orelse break :blk null;
             const tdor = try coded.decodeTypeDefOrRef(tdor_idx);
@@ -276,9 +241,6 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
                 if (cat == .struct_type) break :blk try allocator.dupe(u8, short);
                 if (cat == .class) {
                     // Runtime class: resolve to default interface name for ABI compatibility.
-                    // The emitted struct for a class delegates to its default interface's VTable,
-                    // but the interface may not be in the dependency closure. Use the interface
-                    // name directly so references resolve to the emitted interface struct.
                     const rctx = resolver.Context{ .table_info = ctx.table_info, .heaps = ctx.heaps };
                     if (resolver.resolveDefaultInterfaceNameForRuntimeClassAlloc(rctx, allocator, full)) |iface_full| {
                         defer allocator.free(iface_full);
@@ -287,31 +249,32 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
                         const iface_short = if (iface_dot > 0) iface_full[iface_dot + 1 ..] else iface_full;
                         break :blk try allocator.dupe(u8, iface_short);
                     } else |_| {
-                        // Fallback: use class name as-is (e.g. for classes without default interface)
                         break :blk try allocator.dupe(u8, short);
                     }
                 }
                 if (cat == .interface or cat == .delegate) break :blk try allocator.dupe(u8, short);
             }
 
-            // Cross-WinMD resolution: search companion metadata
+            // Cross-file resolution via unified index
             if (found_td == null) {
-                const ns_part = if (dot) |d| full[0..d] else "";
-                if (resolveTypeCategoryFromCompanions(ctx, short, ns_part)) |cat| {
+                if (ctx.index.findByFullName(full)) |comp_loc| {
+                    const tmp = ui.UnifiedContext.make(ctx.index, comp_loc, ctx.dep_queue, ctx.allocator);
+                    const cat = identifyTypeCategory(tmp, comp_loc.row) catch .other;
                     if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
                     if (cat == .struct_type) break :blk try allocator.dupe(u8, short);
                     if (cat == .class) {
-                        // Companion class: resolve default interface in companion metadata
-                        if (resolveDefaultInterfaceFullNameFromCompanions(allocator, ctx, full)) |iface_full| {
+                        // Cross-file class: resolve default interface
+                        const comp_file = ctx.index.fileOf(comp_loc);
+                        const rctx = resolver.Context{ .table_info = comp_file.table_info, .heaps = comp_file.heaps };
+                        if (resolver.resolveDefaultInterfaceNameForRuntimeClassAlloc(rctx, allocator, full)) |iface_full| {
                             defer allocator.free(iface_full);
                             try ctx.registerDependency(allocator, iface_full);
                             const iface_dot = std.mem.lastIndexOfScalar(u8, iface_full, '.') orelse 0;
                             const iface_short = if (iface_dot > 0) iface_full[iface_dot + 1 ..] else iface_full;
                             break :blk try allocator.dupe(u8, iface_short);
-                        }
+                        } else |_| {}
                     }
-                    // For companion interfaces/delegates: use ?*anyopaque since emission may fail
-                    // (companion may have TypeRef but not TypeDef for some types)
+                    if (cat == .interface or cat == .delegate) break :blk try allocator.dupe(u8, short);
                 }
             }
 
@@ -329,7 +292,6 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
             const elem = try decodeSigType(allocator, ctx, c, is_winrt_iface);
             if (elem) |e| allocator.free(e);
             // WinRT array return: becomes [out] uint32, [out] T* at ABI level
-            // Return a marker so the caller can detect it
             break :blk try allocator.dupe(u8, "SZARRAY");
         },
         0x15 => blk: {
@@ -359,9 +321,8 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
             const short = if (is_generic) short_raw[0..std.mem.indexOfScalar(u8, short_raw, '`').?] else short_raw;
 
             // Register dependency with tick-trimmed name so generic base types
-            // (e.g., IVector`1 → IVector) enter the generation queue
+            // (e.g., IVector`1 -> IVector) enter the generation queue
             if (is_generic) {
-                // Build tick-trimmed full name for dependency registration
                 if (dot) |d| {
                     const trimmed_full = try std.fmt.allocPrint(allocator, "{s}.{s}", .{ full[0..d], short });
                     defer allocator.free(trimmed_full);
@@ -390,10 +351,11 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
                 if (cat == .interface or cat == .delegate) break :blk try allocator.dupe(u8, short);
             }
 
-            // Cross-WinMD companion resolution for GENERICINST
+            // Cross-file resolution via unified index for GENERICINST
             if (found_td == null) {
-                const ns_part = if (dot) |d| full[0..d] else "";
-                if (resolveTypeCategoryFromCompanions(ctx, short, ns_part)) |cat| {
+                if (ctx.index.findByFullName(full)) |comp_loc| {
+                    const tmp = ui.UnifiedContext.make(ctx.index, comp_loc, ctx.dep_queue, ctx.allocator);
+                    const cat = identifyTypeCategory(tmp, comp_loc.row) catch .other;
                     if (cat == .enum_type) break :blk try allocator.dupe(u8, "i32");
                     if (cat == .struct_type or cat == .interface or cat == .delegate or cat == .class) {
                         break :blk try allocator.dupe(u8, short);
@@ -401,7 +363,7 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
                 }
             }
 
-            // Cross-WinMD fallback: known types and interface-like names
+            // Cross-file fallback: known types and interface-like names
             if (std.mem.eql(u8, short, "IInspectable")) break :blk try allocator.dupe(u8, "IInspectable");
             if (std.mem.eql(u8, short, "EventRegistrationToken")) break :blk try allocator.dupe(u8, "EventRegistrationToken");
             if (type_predicates.isKnownExternalEnum(short)) break :blk try allocator.dupe(u8, "i32");

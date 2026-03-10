@@ -8,6 +8,7 @@ const coded = win_zig_metadata.coded_index;
 pub const emit = @import("emit.zig");
 pub const resolver = @import("resolver.zig");
 const sdk_discovery = @import("sdk_discovery.zig");
+pub const ui = @import("unified_index.zig");
 
 pub const findWindowsKitUnionWinmdAlloc = sdk_discovery.findWindowsKitUnionWinmdAlloc;
 pub const findWin32DefaultWinmdAlloc = sdk_discovery.findWin32DefaultWinmdAlloc;
@@ -257,6 +258,7 @@ pub fn main() !void {
     const args = try zig_std.process.argsAlloc(allocator);
     defer zig_std.process.argsFree(allocator, args);
 
+    // CLI arg parsing
     var winmd_path: ?[]const u8 = null;
     var deploy_path: ?[]const u8 = null;
     var no_deps = false;
@@ -284,59 +286,55 @@ pub fn main() !void {
         return;
     }
 
-    const data = try zig_std.fs.cwd().readFileAlloc(allocator, winmd_path.?, 1024*1024*100);
-    defer allocator.free(data);
+    // Phase 1: Load ALL WinMD files (primary + auto-discovered, no distinction)
+    var file_list = zig_std.ArrayList(ui.FileEntry).empty;
+    defer {
+        for (file_list.items) |entry| allocator.free(entry.raw_data);
+        file_list.deinit(allocator);
+    }
 
-    const pe_info = try pe.parse(allocator, data);
-    const md_info = try metadata.parse(allocator, pe_info);
-    const table_stream = if (md_info.getStream("#~")) |s| s else if (md_info.getStream("#-")) |s| s else return error.MissingTableStream;
-    const strings_stream = md_info.getStream("#Strings") orelse return error.MissingStringsStream;
-    const blob_stream = md_info.getStream("#Blob") orelse return error.MissingBlobStream;
-    const guid_stream = md_info.getStream("#GUID") orelse return error.MissingGuidStream;
+    // Primary WinMD first (wins on duplicates)
+    const primary = ui.loadWinMD(allocator, winmd_path.?) catch |e| {
+        zig_std.debug.print("Failed to load primary WinMD: {}\n", .{e});
+        return;
+    };
+    try file_list.append(allocator, primary);
 
-    const table_info = try tables.parse(table_stream.data);
-    const heaps = streams.Heaps{ .strings = strings_stream.data, .blob = blob_stream.data, .guid = guid_stream.data };
-    // Load companion WinMDs for cross-WinMD type resolution
-    var companion_storage: [2]emit.CompanionMetadata = undefined;
-    var companion_count: usize = 0;
+    // Auto-discover companion WinMDs
     const comp_paths = [_]?[]const u8{
         sdk_discovery.findWindowsKitUnionWinmdAlloc(allocator) catch null,
         sdk_discovery.findMicrosoftUiWinmdAlloc(allocator) catch null,
     };
     for (comp_paths) |comp_path_opt| {
-        const comp_path = comp_path_opt orelse continue;
-        const comp_data = zig_std.fs.cwd().readFileAlloc(allocator, comp_path, 1024 * 1024 * 100) catch continue;
-        const comp_pe = pe.parse(allocator, comp_data) catch continue;
-        const comp_md = metadata.parse(allocator, comp_pe) catch continue;
-        const comp_ts = if (comp_md.getStream("#~")) |s| s else if (comp_md.getStream("#-")) |s| s else continue;
-        const comp_ss = comp_md.getStream("#Strings") orelse continue;
-        const comp_bs = comp_md.getStream("#Blob") orelse continue;
-        const comp_gs = comp_md.getStream("#GUID") orelse continue;
-        const comp_ti = tables.parse(comp_ts.data) catch continue;
-        companion_storage[companion_count] = .{
-            .table_info = comp_ti,
-            .heaps = .{ .strings = comp_ss.data, .blob = comp_bs.data, .guid = comp_gs.data },
-        };
-        companion_count += 1;
+        if (comp_path_opt) |comp_path| {
+            if (ui.loadWinMD(allocator, comp_path)) |entry| {
+                file_list.append(allocator, entry) catch {};
+            } else |_| {}
+        }
     }
-    const companions: []const emit.CompanionMetadata = companion_storage[0..companion_count];
 
-    var dependencies = zig_std.StringHashMap(void).init(allocator);
-    defer dependencies.deinit();
-    const ctx = emit.Context{ .table_info = table_info, .heaps = heaps, .dependencies = &dependencies, .allocator = allocator, .companions = companions };
-    const rctx = resolver.Context{ .table_info = table_info, .heaps = heaps };
+    // Phase 2: Build unified index
+    var index = try ui.UnifiedIndex.init(allocator, file_list.items);
+    defer index.deinit();
 
-    var generated_types = zig_std.StringHashMap(void).init(allocator);
-    defer {
-        var it = generated_types.keyIterator();
-        while (it.next()) |k| allocator.free(k.*);
-        generated_types.deinit();
+    // Phase 3: Seed dependency queue from CLI --iface names
+    var queue = ui.DependencyQueue.init(allocator, &index);
+    defer queue.deinit();
+
+    for (iface_names.items) |name| {
+        if (index.findByFullName(name)) |loc| {
+            try queue.enqueue(loc);
+        } else if (index.findByShortName(name)) |loc| {
+            try queue.enqueue(loc);
+        } else {
+            zig_std.debug.print("Warning: type '{s}' not found in any WinMD\n", .{name});
+        }
     }
-    var to_generate = zig_std.ArrayList([]const u8).empty;
-    defer to_generate.deinit(allocator);
 
-    for (iface_names.items) |name| try to_generate.append(allocator, name);
+    // When --no-deps is set, only process the initial seed types (no transitive deps)
+    const max_items: usize = if (no_deps) queue.queue.items.len else zig_std.math.maxInt(usize);
 
+    // Phase 4: Generate output
     var out_buf = zig_std.ArrayList(u8).empty;
     defer out_buf.deinit(allocator);
     const writer = out_buf.writer(allocator);
@@ -347,129 +345,36 @@ pub fn main() !void {
         try emit.writePrologue(writer);
     }
 
-    var head: usize = 0;
-    while (head < to_generate.items.len) : (head += 1) {
-        const name = to_generate.items[head];
-        // Try to find in current WinMD
-        const current_ctx = ctx;
-        const type_row_opt = if (zig_std.mem.indexOfScalar(u8, name, '.') != null)
-            resolver.findTypeDefRowByFullName(rctx, name) catch blk: {
-                const dot = zig_std.mem.lastIndexOfScalar(u8, name, '.') orelse name.len - 1;
-                break :blk emit.findTypeDefRow(ctx, name[dot+1..]) catch null;
-            }
-        else
-            emit.findTypeDefRow(ctx, name) catch null;
+    var processed: usize = 0;
+    while (queue.next()) |loc| {
+        if (processed >= max_items) break;
+        processed += 1;
+        const uctx = ui.UnifiedContext.make(&index, loc, &queue, allocator);
+        const cat = emit.identifyTypeCategory(uctx, loc.row) catch continue;
 
-        // Try companion WinMDs if not found in primary
-        if (type_row_opt == null) {
-            // Search companion WinMDs for this type
-            const short_name = if (zig_std.mem.lastIndexOfScalar(u8, name, '.')) |d| name[d + 1 ..] else name;
-            var found_companion = false;
-            for (companions) |comp| {
-                const t = comp.table_info.getTable(.TypeDef);
-                var crow: u32 = 1;
-                while (crow <= t.row_count) : (crow += 1) {
-                    const ctd = comp.table_info.readTypeDef(crow) catch continue;
-                    const cname = comp.heaps.getString(ctd.type_name) catch continue;
-                    if (!zig_std.mem.eql(u8, cname, short_name)) continue;
-                    const cns = comp.heaps.getString(ctd.type_namespace) catch continue;
-                    const comp_canonical = if (cns.len == 0)
-                        try allocator.dupe(u8, cname)
-                    else
-                        try zig_std.fmt.allocPrint(allocator, "{s}.{s}", .{ cns, cname });
-                    if (generated_types.contains(comp_canonical)) {
-                        allocator.free(comp_canonical);
-                        found_companion = true;
-                        break;
-                    }
-                    try generated_types.put(comp_canonical, {});
-                    const comp_ctx = emit.Context{
-                        .table_info = comp.table_info,
-                        .heaps = comp.heaps,
-                        .dependencies = &dependencies,
-                        .allocator = allocator,
-                        .companions = companions,
-                    };
-                    const comp_cat = emit.identifyTypeCategory(comp_ctx, crow) catch continue;
-                    switch (comp_cat) {
-                        .struct_type => try emit.emitStruct(allocator, writer, comp_ctx, crow),
-                        .enum_type => try emit.emitEnum(allocator, writer, comp_ctx, crow),
-                        .delegate => try emit.emitDelegate(allocator, writer, comp_ctx, crow),
-                        .class => try emit.emitClass(allocator, writer, comp_ctx, crow),
-                        .interface => try emit.emitInterface(allocator, writer, comp_ctx, "", cname),
-                        else => continue,
-                    }
-                    found_companion = true;
-                    break;
-                }
-                if (found_companion) break;
-            }
-            if (!found_companion) {
-                // Emit a stub for unresolvable dependency types
-                const stub_short = if (zig_std.mem.lastIndexOfScalar(u8, name, '.')) |d| name[d + 1 ..] else name;
-                try writer.print("// STUB: {s} (unresolvable)\npub const {s} = extern struct {{ lpVtbl: ?*anyopaque }};\n", .{name, stub_short});
-                try generated_types.put(try allocator.dupe(u8, name), {});
-            } else {
-                // Companion found the type but may not have emitted it (e.g. category .other).
-                // Grep the output to verify; if missing, emit a stub.
-                const stub_short = if (zig_std.mem.lastIndexOfScalar(u8, name, '.')) |d| name[d + 1 ..] else name;
-                const marker = try zig_std.fmt.allocPrint(allocator, "pub const {s} ", .{stub_short});
-                defer allocator.free(marker);
-                const output_so_far = out_buf.items;
-                if (zig_std.mem.indexOf(u8, output_so_far, marker) == null) {
-                    try writer.print("// STUB: {s} (companion found but not emitted)\npub const {s} = extern struct {{ lpVtbl: ?*anyopaque }};\n", .{ name, stub_short });
-                }
-            }
-            continue;
-        }
+        const f = index.fileOf(loc);
+        const td = f.table_info.readTypeDef(loc.row) catch continue;
+        const type_name_raw = f.heaps.getString(td.type_name) catch continue;
+        const type_name = ui.stripTick(type_name_raw);
 
-        const type_row = type_row_opt.?;
-        const type_def = try table_info.readTypeDef(type_row);
-        const type_name = try heaps.getString(type_def.type_name);
-        const type_namespace = try heaps.getString(type_def.type_namespace);
-        const canonical_name = if (type_namespace.len == 0)
-            try allocator.dupe(u8, type_name)
-        else
-            try zig_std.fmt.allocPrint(allocator, "{s}.{s}", .{ type_namespace, type_name });
-        errdefer allocator.free(canonical_name);
-
-        if (generated_types.contains(canonical_name)) continue;
-        try generated_types.put(canonical_name, {});
-
-        const cat = try emit.identifyTypeCategory(current_ctx, type_row);
         switch (cat) {
-            .interface => try emit.emitInterface(allocator, writer, current_ctx, winmd_path.?, name),
-            .enum_type => try emit.emitEnum(allocator, writer, current_ctx, type_row),
-            .struct_type => try emit.emitStruct(allocator, writer, current_ctx, type_row),
-            .delegate => try emit.emitDelegate(allocator, writer, current_ctx, type_row),
-            .class, .other => {
-                // If it's a class with name "Apis" or ends with "Apis", it's likely a Win32 standalone function container
-                if (zig_std.mem.endsWith(u8, name, "Apis")) {
-                    try emit.emitFunctions(allocator, writer, current_ctx, type_row);
-                } else if (cat == .class) {
-                    try emit.emitClass(allocator, writer, current_ctx, type_row);
-                } else {
-                    const resolved = resolver.resolveDefaultInterfaceNameForRuntimeClassAlloc(rctx, allocator, name) catch continue;
-                    defer allocator.free(resolved);
-                    try emit.emitInterface(allocator, writer, current_ctx, winmd_path.?, resolved);
+            .interface => {
+                emit.emitInterface(allocator, writer, uctx, "", type_name) catch continue;
+            },
+            .enum_type => emit.emitEnum(allocator, writer, uctx, loc.row) catch continue,
+            .struct_type => emit.emitStruct(allocator, writer, uctx, loc.row) catch continue,
+            .delegate => emit.emitDelegate(allocator, writer, uctx, loc.row) catch continue,
+            .class => emit.emitClass(allocator, writer, uctx, loc.row) catch continue,
+            .other => {
+                // "Apis" containers for Win32 standalone functions
+                if (zig_std.mem.endsWith(u8, type_name, "Apis")) {
+                    emit.emitFunctions(allocator, writer, uctx, loc.row) catch continue;
                 }
             },
         }
 
-        // Add newly discovered dependencies to the list (unless --no-deps)
-        if (!no_deps) {
-            var dit = dependencies.keyIterator();
-            while (dit.next()) |d| {
-                if (!generated_types.contains(d.*)) {
-                    // Check if already in queue
-                    var in_queue = false;
-                    for (to_generate.items[head+1..]) |q| {
-                        if (zig_std.mem.eql(u8, q, d.*)) { in_queue = true; break; }
-                    }
-                    if (!in_queue) try to_generate.append(allocator, try allocator.dupe(u8, d.*));
-                }
-            }
-        }
+        // Dependencies are automatically registered by emit functions
+        // via uctx.registerDependency() -> queue.registerByName()
     }
 
     try zig_std.fs.cwd().writeFile(.{ .sub_path = deploy_path.?, .data = out_buf.items });

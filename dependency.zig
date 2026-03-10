@@ -3,18 +3,20 @@ const win_zig_metadata = @import("win_zig_metadata");
 const tables = win_zig_metadata.tables;
 const streams = win_zig_metadata.streams;
 const coded = win_zig_metadata.coded_index;
+const ui = @import("unified_index.zig");
 const context = @import("context.zig");
 const type_predicates = @import("type_predicates.zig");
 const metadata_nav = @import("metadata_nav.zig");
 const sig_decode = @import("sig_decode.zig");
 
-const Context = context.Context;
+const Context = ui.UnifiedContext;
+const TypeLocation = ui.TypeLocation;
+const FileEntry = ui.FileEntry;
 const MethodMeta = context.MethodMeta;
 const MethodRange = context.MethodRange;
 const SigCursor = sig_decode.SigCursor;
 
 pub fn registerAssociatedEnumDependencies(allocator: std.mem.Allocator, ctx: Context, method_row: u32) !void {
-    if (ctx.dependencies == null) return;
     const range = try metadata_nav.paramRange(ctx.table_info, method_row);
     const ca_table = ctx.table_info.getTable(.CustomAttribute);
     var ca_row: u32 = 1;
@@ -34,41 +36,62 @@ pub fn registerAssociatedEnumDependencies(allocator: std.mem.Allocator, ctx: Con
 /// Stops at IUnknown/IInspectable (already hardcoded in vtable).
 /// Returns method names in vtable order (grandparent first, then parent, etc.).
 pub fn collectParentMethods(allocator: std.mem.Allocator, ctx: Context, type_row: u32) !std.ArrayList(MethodMeta) {
-    var parent_chain = std.ArrayList(u32).empty;
+    const ParentEntry = struct {
+        loc: TypeLocation,
+    };
+    var parent_chain = std.ArrayList(ParentEntry).empty;
     defer parent_chain.deinit(allocator);
 
-    // Walk extends chain to collect parent TypeDef rows (excluding IUnknown/IInspectable)
+    // Walk extends chain to collect parent TypeLocations (excluding IUnknown/IInspectable)
+    // Start from the current file + type_row
+    var cur_table_info = ctx.table_info;
+    var cur_heaps = ctx.heaps;
+    var cur_file = ctx.file();
     var cur_row = type_row;
+
     while (true) {
-        const td = try ctx.table_info.readTypeDef(cur_row);
+        const td = try cur_table_info.readTypeDef(cur_row);
         if (td.extends == 0) break;
         const extends_tdor = coded.decodeTypeDefOrRef(td.extends) catch break;
-        const parent_name = sig_decode.resolveTypeDefOrRefNameRaw(ctx, extends_tdor) catch break;
+
+        // Resolve name from the current file's heaps (TypeRef name is in the referencing file)
+        const parent_name = resolveNameRaw(cur_table_info, cur_heaps, extends_tdor) catch break;
         if (parent_name == null) break;
+
         // Stop at IUnknown/IInspectable — these are already in the hardcoded vtable base
         if (std.mem.eql(u8, parent_name.?, "IUnknown") or std.mem.eql(u8, parent_name.?, "IInspectable")) break;
-        if (try sig_decode.resolveTypeDefOrRefFullNameAlloc(allocator, ctx, extends_tdor)) |parent_full| {
+
+        // Register dependency using full name
+        if (resolveFullNameAlloc(allocator, cur_table_info, cur_heaps, extends_tdor) catch null) |parent_full| {
             defer allocator.free(parent_full);
             try ctx.registerDependency(allocator, parent_full);
         } else {
             try ctx.registerDependency(allocator, parent_name.?);
         }
-        const parent_row = sig_decode.resolveTypeDefOrRefToRow(ctx, extends_tdor) catch break;
-        if (parent_row == null) break;
-        try parent_chain.append(allocator, parent_row.?);
-        cur_row = parent_row.?;
+
+        // Resolve to a TypeLocation via unified index (handles cross-file references)
+        const parent_loc = ctx.index.resolveTypeDefOrRef(cur_file, extends_tdor) orelse break;
+        try parent_chain.append(allocator, .{ .loc = parent_loc });
+
+        // Advance to the parent's file for the next iteration
+        const parent_file = ctx.index.fileOf(parent_loc);
+        cur_table_info = parent_file.table_info;
+        cur_heaps = parent_file.heaps;
+        cur_file = parent_file;
+        cur_row = parent_loc.row;
     }
 
     // Reverse so grandparent methods come first
-    std.mem.reverse(u32, parent_chain.items);
+    std.mem.reverse(ParentEntry, parent_chain.items);
 
     var result = std.ArrayList(MethodMeta).empty;
-    for (parent_chain.items) |parent_row| {
-        const range = try metadata_nav.methodRange(ctx.table_info, parent_row);
+    for (parent_chain.items) |entry| {
+        const pfile = ctx.index.fileOf(entry.loc);
+        const range = try metadata_nav.methodRange(pfile.table_info, entry.loc.row);
         var mi = range.start;
         while (mi < range.end_exclusive) : (mi += 1) {
-            const m = try ctx.table_info.readMethodDef(mi);
-            const name = try ctx.heaps.getString(m.name);
+            const m = try pfile.table_info.readMethodDef(mi);
+            const name = try pfile.heaps.getString(m.name);
             // Build a simple VtblPlaceholder entry for inherited methods
             try result.append(allocator, .{
                 .raw_name = try allocator.dupe(u8, name),
@@ -100,12 +123,16 @@ pub fn collectRequiredInterfaces(allocator: std.mem.Allocator, ctx: Context, typ
             const parsed = try sig_decode.decodeSigType(allocator, ctx, &sig_c, true);
             if (parsed) |p| allocator.free(p);
         }
-        const iface_name = sig_decode.resolveTypeDefOrRefNameRaw(ctx, iface_tdor) catch continue;
+
+        // Resolve name from current file's tables
+        const iface_name = resolveNameRaw(ctx.table_info, ctx.heaps, iface_tdor) catch continue;
         if (iface_name) |n| {
             // Strip backtick arity suffix (e.g., "IIterable`1" → "IIterable")
             const backtick = std.mem.indexOfScalar(u8, n, '`');
             const clean_name = if (backtick) |bt| n[0..bt] else n;
-            if (try sig_decode.resolveTypeDefOrRefFullNameAlloc(allocator, ctx, iface_tdor)) |iface_full| {
+
+            // Register dependency using full name
+            if (resolveFullNameAlloc(allocator, ctx.table_info, ctx.heaps, iface_tdor) catch null) |iface_full| {
                 defer allocator.free(iface_full);
                 // Register tick-trimmed full name
                 const full_bt = std.mem.indexOfScalar(u8, iface_full, '`');
@@ -165,25 +192,33 @@ pub fn collectInterfaceMethodsByName(
     iface_name: []const u8,
 ) !std.ArrayList(MethodMeta) {
     var result = std.ArrayList(MethodMeta).empty;
-    const iface_row = metadata_nav.findTypeDefRow(ctx, iface_name) catch return result;
-    const range = try metadata_nav.methodRange(ctx.table_info, iface_row);
+
+    // Resolve the interface type via the unified index (cross-file capable)
+    const loc = ctx.index.findByShortName(iface_name) orelse
+        ctx.index.findByFullName(iface_name) orelse
+        return result;
+
+    const iface_file = ctx.index.fileOf(loc);
+    // Build a context for the interface's file so sig_decode resolves types correctly
+    const iface_ctx = Context.make(ctx.index, loc, ctx.dep_queue, allocator);
+    const range = try metadata_nav.methodRange(iface_file.table_info, loc.row);
     var mi = range.start;
     while (mi < range.end_exclusive) : (mi += 1) {
-        const m = try ctx.table_info.readMethodDef(mi);
-        const name = try ctx.heaps.getString(m.name);
+        const m = try iface_file.table_info.readMethodDef(mi);
+        const name = try iface_file.heaps.getString(m.name);
 
         // Decode signature to trigger registerDependency for types used in this method
-        const sig_blob = try ctx.heaps.getBlob(m.signature);
+        const sig_blob = try iface_file.heaps.getBlob(m.signature);
         var sig_c = SigCursor{ .data = sig_blob };
         _ = sig_c.readByte();
         const param_count = sig_c.readCompressedUInt() orelse 0;
-        if (sig_decode.decodeSigType(allocator, ctx, &sig_c, true) catch null) |ret_type| {
+        if (sig_decode.decodeSigType(allocator, iface_ctx, &sig_c, true) catch null) |ret_type| {
             allocator.free(ret_type);
         }
         var p_idx: u32 = 0;
         while (p_idx < param_count) : (p_idx += 1) {
             _ = (sig_c.pos < sig_c.data.len and sig_c.data[sig_c.pos] == 0x10);
-            if (sig_decode.decodeSigType(allocator, ctx, &sig_c, true) catch null) |p_type| {
+            if (sig_decode.decodeSigType(allocator, iface_ctx, &sig_c, true) catch null) |p_type| {
                 allocator.free(p_type);
             }
         }
@@ -199,4 +234,48 @@ pub fn collectInterfaceMethodsByName(
         });
     }
     return result;
+}
+
+// ---------------------------------------------------------------------------
+// Local helpers: resolve names from table_info + heaps directly
+// (avoids depending on sig_decode for simple name resolution, which would
+//  create a circular dependency when sig_decode is also being rewritten)
+// ---------------------------------------------------------------------------
+
+/// Resolve a TypeDefOrRef coded index to a short type name using the given table/heaps.
+fn resolveNameRaw(table_info: tables.Info, heaps: streams.Heaps, tdor: coded.Decoded) !?[]const u8 {
+    return switch (tdor.table) {
+        .TypeDef => blk: {
+            const td = try table_info.readTypeDef(tdor.row);
+            break :blk try heaps.getString(td.type_name);
+        },
+        .TypeRef => blk: {
+            const tr = try table_info.readTypeRef(tdor.row);
+            break :blk try heaps.getString(tr.type_name);
+        },
+        .TypeSpec => null, // TypeSpec name resolution requires blob parsing; skip for now
+        else => null,
+    };
+}
+
+/// Resolve a TypeDefOrRef coded index to a fully-qualified "Namespace.TypeName" string.
+fn resolveFullNameAlloc(allocator: std.mem.Allocator, table_info: tables.Info, heaps: streams.Heaps, tdor: coded.Decoded) !?[]const u8 {
+    return switch (tdor.table) {
+        .TypeDef => blk: {
+            const td = try table_info.readTypeDef(tdor.row);
+            const ns = try heaps.getString(td.type_namespace);
+            const name = try heaps.getString(td.type_name);
+            if (ns.len == 0) break :blk try allocator.dupe(u8, name);
+            break :blk try std.fmt.allocPrint(allocator, "{s}.{s}", .{ ns, name });
+        },
+        .TypeRef => blk: {
+            const tr = try table_info.readTypeRef(tdor.row);
+            const ns = try heaps.getString(tr.type_namespace);
+            const name = try heaps.getString(tr.type_name);
+            if (ns.len == 0) break :blk try allocator.dupe(u8, name);
+            break :blk try std.fmt.allocPrint(allocator, "{s}.{s}", .{ ns, name });
+        },
+        .TypeSpec => null,
+        else => null,
+    };
 }

@@ -4,9 +4,10 @@ const tables = win_zig_metadata.tables;
 const streams = win_zig_metadata.streams;
 const coded = win_zig_metadata.coded_index;
 const context = @import("context.zig");
+const ui = @import("unified_index.zig");
 const type_predicates = @import("type_predicates.zig");
 
-const Context = context.Context;
+const Context = ui.UnifiedContext;
 const MethodRange = context.MethodRange;
 
 pub fn findTypeDefRow(ctx: Context, interface_name: []const u8) !u32 {

@@ -7,8 +7,9 @@ const resolver = @import("resolver.zig");
 
 // Re-export types from submodules for backward compatibility
 pub const context_mod = @import("context.zig");
+const ui = @import("unified_index.zig");
+pub const Context = ui.UnifiedContext;
 pub const CompanionMetadata = context_mod.CompanionMetadata;
-pub const Context = context_mod.Context;
 pub const MethodMeta = context_mod.MethodMeta;
 pub const MethodRange = context_mod.MethodRange;
 pub const TypeCategory = context_mod.TypeCategory;
@@ -34,7 +35,8 @@ pub fn emitInterface(
 ) !void {
     const type_row = try nav.findTypeDefRow(ctx, interface_name);
     const type_def = try ctx.table_info.readTypeDef(type_row);
-    const type_name = try ctx.heaps.getString(type_def.type_name);
+    const type_name_raw = try ctx.heaps.getString(type_def.type_name);
+    const type_name = if (std.mem.indexOfScalar(u8, type_name_raw, '`')) |bt| type_name_raw[0..bt] else type_name_raw;
     const ns = try ctx.heaps.getString(type_def.type_namespace);
     const is_winrt_iface = !std.mem.startsWith(u8, ns, "Windows.Win32.") and !std.mem.startsWith(u8, ns, "Windows.Wdk.");
 
@@ -745,7 +747,8 @@ pub fn emitInterface(
 
 pub fn emitEnum(_: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
     const type_def = try ctx.table_info.readTypeDef(type_row);
-    const type_name = try ctx.heaps.getString(type_def.type_name);
+    const type_name_raw = try ctx.heaps.getString(type_def.type_name);
+    const type_name = if (std.mem.indexOfScalar(u8, type_name_raw, '`')) |bt| type_name_raw[0..bt] else type_name_raw;
     const range = try nav.fieldRange(ctx.table_info, type_row);
 
     const backing_type = sig.detectEnumBackingType(ctx, range) catch "i32";
@@ -789,7 +792,8 @@ pub fn emitEnum(_: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u
 
 pub fn emitStruct(allocator: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
     const type_def = try ctx.table_info.readTypeDef(type_row);
-    const type_name = try ctx.heaps.getString(type_def.type_name);
+    const type_name_raw = try ctx.heaps.getString(type_def.type_name);
+    const type_name = if (std.mem.indexOfScalar(u8, type_name_raw, '`')) |bt| type_name_raw[0..bt] else type_name_raw;
     try writer.print("pub const {s} = extern struct {{\n", .{type_name});
     const range = try nav.fieldRange(ctx.table_info, type_row);
     var ii = range.start;
@@ -814,7 +818,8 @@ pub fn emitFunctions(
     type_row: u32,
 ) !void {
     const type_def = try ctx.table_info.readTypeDef(type_row);
-    const type_name = try ctx.heaps.getString(type_def.type_name);
+    const type_name_raw = try ctx.heaps.getString(type_def.type_name);
+    const type_name = if (std.mem.indexOfScalar(u8, type_name_raw, '`')) |bt| type_name_raw[0..bt] else type_name_raw;
 
     const range = try nav.methodRange(ctx.table_info, type_row);
     var ii = range.start;
@@ -892,7 +897,8 @@ fn findDllName(ctx: Context, method_row: u32) !?[]const u8 {
 
 pub fn emitClass(allocator: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
     const type_def = try ctx.table_info.readTypeDef(type_row);
-    const type_name = try ctx.heaps.getString(type_def.type_name);
+    const type_name_raw = try ctx.heaps.getString(type_def.type_name);
+    const type_name = if (std.mem.indexOfScalar(u8, type_name_raw, '`')) |bt| type_name_raw[0..bt] else type_name_raw;
     const ns = try ctx.heaps.getString(type_def.type_namespace);
 
     const full_name = try std.fmt.allocPrint(allocator, "{s}.{s}", .{ ns, type_name });
@@ -1038,7 +1044,8 @@ pub fn emitClass(allocator: std.mem.Allocator, writer: anytype, ctx: Context, ty
 
 pub fn emitDelegate(allocator: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
     const type_def = try ctx.table_info.readTypeDef(type_row);
-    const type_name = try ctx.heaps.getString(type_def.type_name);
+    const type_name_raw = try ctx.heaps.getString(type_def.type_name);
+    const type_name = if (std.mem.indexOfScalar(u8, type_name_raw, '`')) |bt| type_name_raw[0..bt] else type_name_raw;
     const ns = try ctx.heaps.getString(type_def.type_namespace);
     const is_winrt = !std.mem.startsWith(u8, ns, "Windows.Win32.") and !std.mem.startsWith(u8, ns, "Windows.Wdk.");
 
