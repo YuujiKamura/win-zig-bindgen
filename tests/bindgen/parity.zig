@@ -161,10 +161,11 @@ fn runCase(case_id: []const u8) !void {
         .allow_nt_wait_compat = ctx.containsStr(filters.items, "NtWaitForSingleObject") and ctx.containsStr(filters.items, "WaitForSingleObjectEx"),
     };
 
-    _ = generateActualOutputCached(allocator, caches.win32, caches.winrt, filters.items) catch |err| {
+    const gen_output = generateActualOutputCached(allocator, caches.win32, caches.winrt, filters.items) catch |err| {
         std.log.err("[{s}] generation failed: {s}", .{ case_id, @errorName(err) });
         return error.TestUnexpectedResult;
     };
+    allocator.free(gen_output);
 
     const expected_manifest = ensureExpectedManifest(allocator, out_name) catch return error.TestUnexpectedResult;
     const actual_manifest = ensureActualManifest(allocator, caches.win32, caches.winrt, filters.items) catch |err| {
