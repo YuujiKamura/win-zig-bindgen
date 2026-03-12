@@ -345,6 +345,13 @@ pub fn main() !void {
         try emit.writePrologue(writer);
     }
 
+    var emitted_event_iids = zig_std.StringHashMap(void).init(allocator);
+    defer {
+        var it = emitted_event_iids.keyIterator();
+        while (it.next()) |k| allocator.free(k.*);
+        emitted_event_iids.deinit();
+    }
+
     var processed: usize = 0;
     while (queue.next()) |loc| {
         if (processed >= max_items) break;
@@ -359,7 +366,7 @@ pub fn main() !void {
 
         switch (cat) {
             .interface => {
-                emit.emitInterface(allocator, writer, uctx, "", type_name) catch continue;
+                emit.emitInterface(allocator, writer, uctx, "", type_name, &emitted_event_iids) catch continue;
             },
             .enum_type => emit.emitEnum(allocator, writer, uctx, loc.row) catch continue,
             .struct_type => emit.emitStruct(allocator, writer, uctx, loc.row) catch continue,

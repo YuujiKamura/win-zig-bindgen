@@ -33,6 +33,7 @@ pub fn emitInterface(
     ctx: Context,
     _: []const u8,
     interface_name: []const u8,
+    emitted_event_iids: ?*std.StringHashMap(void),
 ) !void {
     const type_row = try nav.findTypeDefRow(ctx, interface_name);
     const type_def = try ctx.table_info.readTypeDef(type_row);
@@ -753,6 +754,20 @@ pub fn emitInterface(
             const result = event_iid.computeTypedEventHandlerIid(allocator, ctx, ei) catch continue;
             if (result) |r| {
                 defer allocator.free(r.event_suffix);
+                // Skip duplicates: different interfaces may have events with the same suffix
+                // (e.g. CharacterReceived on IUIElement vs InputKeyboardSource).
+                // First-emitted wins.
+                if (emitted_event_iids) |set| {
+                    const key = std.fmt.allocPrint(allocator, "IID_TypedEventHandler_{s}", .{r.event_suffix}) catch continue;
+                    if (set.contains(key)) {
+                        allocator.free(key);
+                        continue;
+                    }
+                    set.put(key, {}) catch {
+                        allocator.free(key);
+                        continue;
+                    };
+                }
                 try writer.print("pub const IID_TypedEventHandler_{s} = ", .{r.event_suffix});
                 try event_iid.formatGuidLiteral(r.guid, writer);
                 try writer.writeAll(";\n");
@@ -1090,7 +1105,7 @@ pub fn emitDelegate(allocator: std.mem.Allocator, writer: anytype, ctx: Context,
     const is_winrt = !std.mem.startsWith(u8, ns, "Windows.Win32.") and !std.mem.startsWith(u8, ns, "Windows.Wdk.");
 
     if (is_winrt) {
-        try emitInterface(allocator, writer, ctx, "", type_name);
+        try emitInterface(allocator, writer, ctx, "", type_name, null);
         try emitDelegateImpl(writer, type_name);
         return;
     }
