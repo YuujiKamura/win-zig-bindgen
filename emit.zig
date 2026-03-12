@@ -143,6 +143,46 @@ pub fn emitInterface(
             if (is_byref) try byref_indices.append(allocator, p_idx);
             defer if (p_type_opt != null) allocator.free(p_type_raw);
 
+            // SZARRAY input parameter: expand to (u32 count, ?*anyopaque ptr) pair
+            if (std.mem.startsWith(u8, p_type_raw, "SZARRAY:")) {
+                const p_name = all_param_names.items[p_idx];
+                const len_name = try std.fmt.allocPrint(allocator, "{s}_len", .{p_name});
+
+                try vtbl_params.appendSlice(allocator, ", u32, ?*anyopaque");
+                try param_vtbl_types.append(allocator, try allocator.dupe(u8, "u32"));
+                try param_vtbl_types.append(allocator, try allocator.dupe(u8, "?*anyopaque"));
+                try param_logical_types.append(allocator, try allocator.dupe(u8, "u32"));
+                try param_logical_types.append(allocator, try allocator.dupe(u8, "?*anyopaque"));
+
+                // Insert synthetic _len name before the original param name so that
+                // all_param_names stays aligned with param_vtbl_types (2 entries per SZARRAY).
+                // After insert: [..., len_name, p_name, ...]. We skip past both via p_idx += 1
+                // here plus the loop's own increment on continue.
+                try all_param_names.insert(allocator, p_idx, len_name);
+
+                // Wrapper params: two ABI params for one metadata param
+                try wrapper_params.appendSlice(allocator, ", ");
+                try wrapper_params.appendSlice(allocator, len_name);
+                try wrapper_params.appendSlice(allocator, ": u32, ");
+                try wrapper_params.appendSlice(allocator, p_name);
+                try wrapper_params.appendSlice(allocator, ": ?*anyopaque");
+
+                try wrapper_fwd_args.appendSlice(allocator, ", ");
+                try wrapper_fwd_args.appendSlice(allocator, len_name);
+                try wrapper_fwd_args.appendSlice(allocator, ", ");
+                try wrapper_fwd_args.appendSlice(allocator, p_name);
+
+                try call_args.appendSlice(allocator, ", ");
+                try call_args.appendSlice(allocator, len_name);
+                try call_args.appendSlice(allocator, ", ");
+                try call_args.appendSlice(allocator, p_name);
+
+                // Advance past the inserted _len entry; the loop's own p_idx += 1
+                // will advance past the original p_name entry.
+                p_idx += 1;
+                continue;
+            }
+
             var p_type_vtbl = if (std.mem.eql(u8, p_type_raw, "anyopaque"))
                 try allocator.dupe(u8, "?*anyopaque")
             else if (tp.isBuiltinType(p_type_raw))
@@ -209,7 +249,7 @@ pub fn emitInterface(
             }
         }
 
-        if (is_winrt_iface and std.mem.eql(u8, ret_type_raw, "SZARRAY")) {
+        if (is_winrt_iface and std.mem.startsWith(u8, ret_type_raw, "SZARRAY:")) {
             const synth_base: u32 = @intCast(param_vtbl_types.items.len);
             try vtbl_params.appendSlice(allocator, ", *u32");
             try param_vtbl_types.append(allocator, try allocator.dupe(u8, "*u32"));
@@ -221,7 +261,7 @@ pub fn emitInterface(
             try param_vtbl_types.append(allocator, try allocator.dupe(u8, "*?*anyopaque"));
             try param_logical_types.append(allocator, try allocator.dupe(u8, "*?*anyopaque"));
             try byref_indices.append(allocator, synth_base + 1);
-            try all_param_names.append(allocator, try allocator.dupe(u8, "definitions"));
+            try all_param_names.append(allocator, try allocator.dupe(u8, "items"));
         } else if (is_winrt_iface and !std.mem.eql(u8, ret_type_raw, "void")) {
             const is_iface_ret = tp.isInterfaceType(ret_type_raw);
             const synth_param_idx: u32 = @intCast(param_vtbl_types.items.len);

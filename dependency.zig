@@ -278,7 +278,7 @@ fn buildMethodVtblSig(
     }
 
     // WinRT: non-void return becomes out parameter, return type is HRESULT
-    if (!std.mem.eql(u8, ret_type_raw, "void") and !std.mem.eql(u8, ret_type_raw, "SZARRAY")) {
+    if (!std.mem.eql(u8, ret_type_raw, "void") and !std.mem.startsWith(u8, ret_type_raw, "SZARRAY:")) {
         const is_known_value = tp.isBuiltinType(ret_type_raw) or tp.isKnownStruct(ret_type_raw) or std.mem.eql(u8, ret_type_raw, "EventRegistrationToken");
         if (!is_known_value) {
             try vtbl_params.appendSlice(allocator, ", *?*anyopaque");
@@ -287,7 +287,7 @@ fn buildMethodVtblSig(
             defer allocator.free(out_type);
             try vtbl_params.appendSlice(allocator, out_type);
         }
-    } else if (std.mem.eql(u8, ret_type_raw, "SZARRAY")) {
+    } else if (std.mem.startsWith(u8, ret_type_raw, "SZARRAY:")) {
         try vtbl_params.appendSlice(allocator, ", *u32, *?*anyopaque");
     }
 

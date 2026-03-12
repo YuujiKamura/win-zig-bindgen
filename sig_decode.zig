@@ -291,11 +291,11 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
             break :blk try allocator.dupe(u8, "?*anyopaque");
         },
         0x1d => blk: {
-            // SZARRAY: consume element type to keep cursor aligned
+            // SZARRAY: element type follows
             const elem = try decodeSigType(allocator, ctx, c, is_winrt_iface);
-            if (elem) |e| allocator.free(e);
-            // WinRT array return: becomes [out] uint32, [out] T* at ABI level
-            break :blk try allocator.dupe(u8, "SZARRAY");
+            const elem_name = elem orelse "?*anyopaque";
+            defer if (elem) |e| allocator.free(e);
+            break :blk try std.fmt.allocPrint(allocator, "SZARRAY:{s}", .{elem_name});
         },
         0x15 => blk: {
             // GENERICINST: marker CLASS/VALUETYPE, TypeDefOrRef, count, type_args...
