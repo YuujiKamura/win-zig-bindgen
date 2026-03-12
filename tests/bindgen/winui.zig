@@ -7,4 +7,5 @@ comptime {
     _ = @import("winui/shape.zig");
     _ = @import("winui/value_types.zig");
     _ = @import("winui/canary.zig");
+    _ = @import("winui/delegate_iid_investigation.zig");
 }

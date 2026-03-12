@@ -9,6 +9,8 @@ pub const emit = @import("emit.zig");
 pub const resolver = @import("resolver.zig");
 const sdk_discovery = @import("sdk_discovery.zig");
 pub const ui = @import("unified_index.zig");
+pub const guidmod = @import("winrt_guid.zig");
+pub const nav = @import("metadata_nav.zig");
 
 pub const findWindowsKitUnionWinmdAlloc = sdk_discovery.findWindowsKitUnionWinmdAlloc;
 pub const findWin32DefaultWinmdAlloc = sdk_discovery.findWin32DefaultWinmdAlloc;

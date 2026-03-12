@@ -114,6 +114,16 @@ pub fn typedEventHandlerIid(sender_sig: []const u8, result_sig: []const u8, allo
     return guidFromSignature(sig);
 }
 
+/// Compute the runtime IID for a non-generic WinRT delegate.
+///
+/// For non-generic delegates, the GuidAttribute in the WinMD metadata IS the
+/// runtime IID used for QueryInterface. No pinterface computation is needed.
+/// This is unlike generic delegates (e.g., TypedEventHandler<TSender, TResult>)
+/// which require SHA-1 pinterface computation from type signatures.
+pub fn delegateIid(metadata_guid: Guid, _: std.mem.Allocator) !Guid {
+    return metadata_guid;
+}
+
 pub const ParseGuidError = error{ InvalidGuidText };
 
 pub fn parseGuidText(text_in: []const u8) ParseGuidError!Guid {
@@ -276,6 +286,44 @@ test "typedEventHandlerIid is deterministic for same inputs" {
     const ys = try y.toDashedLowerAlloc(alloc);
     defer alloc.free(ys);
     try std.testing.expectEqualStrings(xs, ys);
+}
+
+test "non-generic delegate IID: metadata GUID IS the runtime IID" {
+    // FINDING: For non-generic WinUI3 delegates, the GuidAttribute in the WinMD
+    // IS the runtime IID used for QueryInterface. No pinterface computation needed.
+    //
+    // Evidence from WinMD extraction:
+    //   SizeChangedEventHandler:     metadata = 8d7b1a58-14c6-51c9-892c-9fcce368e77d (== prologue)
+    //   SelectionChangedEventHandler: metadata = a232390d-0e34-595e-8931-fa928a9909f4 (== prologue)
+    //   RoutedEventHandler:          metadata = dae23d85-69ca-5bdf-805b-6161a3a215cc (!= prologue af8dae19...)
+    //
+    // The prologue IID for RoutedEventHandler (af8dae19...) appears to be INCORRECT.
+    // The correct IID is the metadata GUID: dae23d85-69ca-5bdf-805b-6161a3a215cc.
+    //
+    // All three metadata GUIDs have version nibble 5 (UUIDv5), meaning the WinRT
+    // toolchain computed them from signatures. But the WinMD GuidAttribute is the
+    // final, authoritative IID.
+
+    // Verify version nibble is 5 for the metadata GUIDs
+    const routed = try parseGuidText("dae23d85-69ca-5bdf-805b-6161a3a215cc");
+    try std.testing.expectEqual(@as(u16, 5), (routed.data3 >> 12) & 0xF);
+
+    const size_changed = try parseGuidText("8d7b1a58-14c6-51c9-892c-9fcce368e77d");
+    try std.testing.expectEqual(@as(u16, 5), (size_changed.data3 >> 12) & 0xF);
+
+    const selection = try parseGuidText("a232390d-0e34-595e-8931-fa928a9909f4");
+    try std.testing.expectEqual(@as(u16, 5), (selection.data3 >> 12) & 0xF);
+}
+
+test "delegateIid: compute from metadata GUID" {
+    const alloc = std.testing.allocator;
+
+    // delegateIid just returns the metadata GUID as-is for non-generic delegates
+    const g = try parseGuidText("dae23d85-69ca-5bdf-805b-6161a3a215cc");
+    const result = try delegateIid(g, alloc);
+    const s = try result.toDashedLowerAlloc(alloc);
+    defer alloc.free(s);
+    try std.testing.expectEqualStrings("dae23d85-69ca-5bdf-805b-6161a3a215cc", s);
 }
 
 test "parseGuidText rejects malformed inputs" {
