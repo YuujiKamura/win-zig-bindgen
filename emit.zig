@@ -739,7 +739,7 @@ pub fn emitInterface(
     }
     const cat = sig.identifyTypeCategory(ctx, type_row) catch .other;
     if (cat == .delegate) {
-        try writer.writeAll("    pub fn new() !*@This() { return error.NotImplemented; }\n");
+        try writer.print("    pub fn new() !*@This() {{ @compileError(\"use {s}Impl instead\"); }}\n", .{type_name});
     }
     try writer.writeAll("};\n\n");
 }
@@ -1074,6 +1074,7 @@ pub fn emitDelegate(allocator: std.mem.Allocator, writer: anytype, ctx: Context,
 
     if (is_winrt) {
         try emitInterface(allocator, writer, ctx, "", type_name);
+        try emitDelegateImpl(writer, type_name);
         return;
     }
 
@@ -1134,4 +1135,137 @@ pub fn emitDelegate(allocator: std.mem.Allocator, writer: anytype, ctx: Context,
 
         try writer.print("pub const {s} = ?*const fn ({s}) callconv(.winapi) {s};\n\n", .{ type_name, params.items, ret_type_raw });
     }
+}
+
+fn emitDelegateImpl(writer: anytype, type_name: []const u8) !void {
+    try writer.print(
+        \\pub fn {0s}Impl(comptime Context: type, comptime CallbackFn: type) type {{
+        \\    return struct {{
+        \\        const Self = @This();
+        \\        const Delegate = {0s};
+        \\
+        \\        pub const ComHeader = extern struct {{
+        \\            lpVtbl: *const Delegate.VTable,
+        \\        }};
+        \\
+        \\        com: ComHeader,
+        \\        allocator: @import("std").mem.Allocator,
+        \\        ref_count: @import("std").atomic.Value(u32),
+        \\        context: *Context,
+        \\        callback: CallbackFn,
+        \\        delegate_iid: ?*const GUID = null,
+        \\
+        \\        const S_OK: HRESULT = 0;
+        \\        const E_NOINTERFACE: HRESULT = @bitCast(@as(u32, 0x80004002));
+        \\
+        \\        const vtable_instance = Delegate.VTable{{
+        \\            .QueryInterface = &queryInterfaceFn,
+        \\            .AddRef = &addRefFn,
+        \\            .Release = &releaseFn,
+        \\            .GetIids = null,
+        \\            .GetRuntimeClassName = null,
+        \\            .GetTrustLevel = null,
+        \\            .Invoke = &invokeFn,
+        \\        }};
+        \\
+        \\        pub fn create(allocator: @import("std").mem.Allocator, context: *Context, callback: CallbackFn) !*Self {{
+        \\            const self = try allocator.create(Self);
+        \\            self.* = .{{
+        \\                .com = .{{ .lpVtbl = &vtable_instance }},
+        \\                .allocator = allocator,
+        \\                .ref_count = @import("std").atomic.Value(u32).init(1),
+        \\                .context = context,
+        \\                .callback = callback,
+        \\            }};
+        \\            return self;
+        \\        }}
+        \\
+        \\        pub fn createWithIid(allocator: @import("std").mem.Allocator, context: *Context, callback: CallbackFn, iid: *const GUID) !*Self {{
+        \\            const self = try allocator.create(Self);
+        \\            self.* = .{{
+        \\                .com = .{{ .lpVtbl = &vtable_instance }},
+        \\                .allocator = allocator,
+        \\                .ref_count = @import("std").atomic.Value(u32).init(1),
+        \\                .context = context,
+        \\                .callback = callback,
+        \\                .delegate_iid = iid,
+        \\            }};
+        \\            return self;
+        \\        }}
+        \\
+        \\        pub fn comPtr(self: *Self) *anyopaque {{
+        \\            return @ptrCast(&self.com);
+        \\        }}
+        \\
+        \\        pub fn release(self: *Self) void {{
+        \\            _ = self.com.lpVtbl.Release(self.comPtr());
+        \\        }}
+        \\
+        \\        fn fromComPtr(ptr: *anyopaque) *Self {{
+        \\            const header: *ComHeader = @ptrCast(@alignCast(ptr));
+        \\            return @fieldParentPtr("com", header);
+        \\        }}
+        \\
+        \\        fn guidEql(a: *const GUID, b: *const GUID) bool {{
+        \\            return a.data1 == b.data1 and a.data2 == b.data2 and a.data3 == b.data3 and @import("std").mem.eql(u8, &a.data4, &b.data4);
+        \\        }}
+        \\
+        \\        fn queryInterfaceFn(this: *anyopaque, riid: *const GUID, ppv: *?*anyopaque) callconv(.winapi) HRESULT {{
+        \\            const IID_IUnknown = GUID{{ .data1 = 0x00000000, .data2 = 0x0000, .data3 = 0x0000, .data4 = .{{ 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46 }} }};
+        \\            const IID_IAgileObject = GUID{{ .data1 = 0x94ea2b94, .data2 = 0xe9cc, .data3 = 0x49e0, .data4 = .{{ 0xc0, 0xff, 0xee, 0x64, 0xca, 0x8f, 0x5b, 0x90 }} }};
+        \\            const self = fromComPtr(this);
+        \\            if (guidEql(riid, &IID_IUnknown) or guidEql(riid, &IID_IAgileObject)) {{
+        \\                ppv.* = this;
+        \\                _ = self.ref_count.fetchAdd(1, .monotonic);
+        \\                return S_OK;
+        \\            }}
+        \\            if (self.delegate_iid) |iid| {{
+        \\                if (guidEql(riid, iid)) {{
+        \\                    ppv.* = this;
+        \\                    _ = self.ref_count.fetchAdd(1, .monotonic);
+        \\                    return S_OK;
+        \\                }}
+        \\            }}
+        \\            ppv.* = null;
+        \\            return E_NOINTERFACE;
+        \\        }}
+        \\
+        \\        fn addRefFn(this: *anyopaque) callconv(.winapi) u32 {{
+        \\            const self = fromComPtr(this);
+        \\            return self.ref_count.fetchAdd(1, .monotonic) + 1;
+        \\        }}
+        \\
+        \\        fn releaseFn(this: *anyopaque) callconv(.winapi) u32 {{
+        \\            const self = fromComPtr(this);
+        \\            const prev = self.ref_count.fetchSub(1, .monotonic);
+        \\            const next = prev - 1;
+        \\            if (next == 0) self.allocator.destroy(self);
+        \\            return next;
+        \\        }}
+        \\
+        \\        fn invokeFn(this: *anyopaque, sender: ?*anyopaque, args: ?*anyopaque) callconv(.winapi) HRESULT {{
+        \\            const self = fromComPtr(this);
+        \\            const cb_ptr_info = @typeInfo(CallbackFn).pointer;
+        \\            const fn_info = @typeInfo(cb_ptr_info.child).@"fn";
+        \\            const sender_t = fn_info.params[1].type.?;
+        \\            const args_t = fn_info.params[2].type.?;
+        \\            if (sender_t == ?*anyopaque and args_t == ?*anyopaque) {{
+        \\                self.callback(self.context, sender, args);
+        \\            }} else if (sender_t == ?*anyopaque and args_t == *anyopaque) {{
+        \\                const a = args orelse return S_OK;
+        \\                self.callback(self.context, sender, a);
+        \\            }} else if (sender_t == *anyopaque and args_t == ?*anyopaque) {{
+        \\                const s = sender orelse return S_OK;
+        \\                self.callback(self.context, s, args);
+        \\            }} else {{
+        \\                const s = sender orelse return S_OK;
+        \\                const a = args orelse return S_OK;
+        \\                self.callback(self.context, s, a);
+        \\            }}
+        \\            return S_OK;
+        \\        }}
+        \\    }};
+        \\}}
+        \\
+    , .{type_name});
 }
