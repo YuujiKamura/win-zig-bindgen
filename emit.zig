@@ -34,6 +34,7 @@ pub fn emitInterface(
     _: []const u8,
     interface_name: []const u8,
     emitted_event_iids: ?*std.StringHashMap(void),
+    is_delegate: bool,
 ) !void {
     const type_row = try nav.findTypeDefRow(ctx, interface_name);
     const type_def = try ctx.table_info.readTypeDef(type_row);
@@ -695,7 +696,10 @@ pub fn emitInterface(
 
     try writer.print("pub const {s} = extern struct {{\n", .{type_name});
     try writer.print("    pub const IID = GUID{{ .data1 = 0x{x:0>8}, .data2 = 0x{x:0>4}, .data3 = 0x{x:0>4}, .data4 = .{{ 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2} }} }};\n", .{ std.mem.readInt(u32, guid[0..4], .little), std.mem.readInt(u16, guid[4..6], .little), std.mem.readInt(u16, guid[6..8], .little), guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15] });
-    try writer.writeAll("    lpVtbl: *const VTable,\n    pub const VTable = extern struct {\n        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,\n        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,\n        Release: *const fn (*anyopaque) callconv(.winapi) u32,\n        GetIids: VtblPlaceholder,\n        GetRuntimeClassName: VtblPlaceholder,\n        GetTrustLevel: VtblPlaceholder,\n");
+    try writer.writeAll("    lpVtbl: *const VTable,\n    pub const VTable = extern struct {\n        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,\n        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,\n        Release: *const fn (*anyopaque) callconv(.winapi) u32,\n");
+    if (!is_delegate) {
+        try writer.writeAll("        GetIids: VtblPlaceholder,\n        GetRuntimeClassName: VtblPlaceholder,\n        GetTrustLevel: VtblPlaceholder,\n");
+    }
     {
         var vtbl_seen = std.StringHashMap(void).init(allocator);
         defer {
@@ -1145,7 +1149,7 @@ pub fn emitDelegate(allocator: std.mem.Allocator, writer: anytype, ctx: Context,
     const is_winrt = !std.mem.startsWith(u8, ns, "Windows.Win32.") and !std.mem.startsWith(u8, ns, "Windows.Wdk.");
 
     if (is_winrt) {
-        try emitInterface(allocator, writer, ctx, "", type_name, null);
+        try emitInterface(allocator, writer, ctx, "", type_name, null, true);
         try emitDelegateImpl(writer, type_name);
         try writer.print("pub const IID_{s} = {s}.IID;\n\n", .{ type_name, type_name });
         return;
@@ -1235,9 +1239,6 @@ fn emitDelegateImpl(writer: anytype, type_name: []const u8) !void {
         \\            .QueryInterface = &queryInterfaceFn,
         \\            .AddRef = &addRefFn,
         \\            .Release = &releaseFn,
-        \\            .GetIids = null,
-        \\            .GetRuntimeClassName = null,
-        \\            .GetTrustLevel = null,
         \\            .Invoke = &invokeFn,
         \\        }};
         \\

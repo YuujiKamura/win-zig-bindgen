@@ -368,7 +368,7 @@ pub fn main() !void {
 
         switch (cat) {
             .interface => {
-                emit.emitInterface(allocator, writer, uctx, "", type_name, &emitted_event_iids) catch continue;
+                emit.emitInterface(allocator, writer, uctx, "", type_name, &emitted_event_iids, false) catch continue;
             },
             .enum_type => emit.emitEnum(allocator, writer, uctx, loc.row) catch continue,
             .struct_type => emit.emitStruct(allocator, writer, uctx, loc.row) catch continue,

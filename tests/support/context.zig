@@ -254,7 +254,7 @@ pub fn findExactTypeRow(ctx: *GenCtx, filter_name: []const u8) !?u32 {
 fn emitResolvedTypeWithCtx(allocator: std.mem.Allocator, writer: anytype, uctx: emit.Context, winmd_path: []const u8, table_info: tables.Info, heaps_val: streams.Heaps, filter_name: []const u8, row: u32) !void {
     const cat = try emit.identifyTypeCategory(uctx, row);
     switch (cat) {
-        .interface => try emit.emitInterface(allocator, writer, uctx, winmd_path, filter_name, null),
+        .interface => try emit.emitInterface(allocator, writer, uctx, winmd_path, filter_name, null, false),
         .enum_type => try emit.emitEnum(allocator, writer, uctx, row),
         .struct_type => try emit.emitStruct(allocator, writer, uctx, row),
         .delegate => try emit.emitDelegate(allocator, writer, uctx, row),
@@ -282,7 +282,7 @@ fn emitResolvedTypeWithCtx(allocator: std.mem.Allocator, writer: anytype, uctx: 
                     class_full_name,
                 ) catch return;
                 defer allocator.free(resolved);
-                try emit.emitInterface(allocator, writer, uctx, winmd_path, resolved, null);
+                try emit.emitInterface(allocator, writer, uctx, winmd_path, resolved, null, false);
             }
         },
     }
@@ -522,7 +522,7 @@ pub fn generateActualOutputWithExtras(
                             emitted = true;
                         },
                         .interface => {
-                            emit.emitInterface(allocator, writer, comp_uctx, "", cname, null) catch continue;
+                            emit.emitInterface(allocator, writer, comp_uctx, "", cname, null, false) catch continue;
                             emitted = true;
                         },
                         else => continue,
