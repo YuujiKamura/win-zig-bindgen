@@ -19,6 +19,7 @@ const nav = @import("metadata_nav.zig");
 const sig = @import("sig_decode.zig");
 const dep = @import("dependency.zig");
 const prol = @import("prologue.zig");
+const event_iid = @import("event_iid.zig");
 
 // Re-export public functions from submodules
 pub const writePrologue = prol.writePrologue;
@@ -744,6 +745,20 @@ pub fn emitInterface(
         try writer.print("    pub fn new() !*@This() {{ @compileError(\"use {s}Impl instead\"); }}\n", .{type_name});
     }
     try writer.writeAll("};\n\n");
+
+    // Emit TypedEventHandler parameterized IIDs for add_ methods on this interface
+    {
+        var ei = method_range_info.start;
+        while (ei < method_range_info.end_exclusive) : (ei += 1) {
+            const result = event_iid.computeTypedEventHandlerIid(allocator, ctx, ei) catch continue;
+            if (result) |r| {
+                defer allocator.free(r.event_suffix);
+                try writer.print("pub const IID_TypedEventHandler_{s} = ", .{r.event_suffix});
+                try event_iid.formatGuidLiteral(r.guid, writer);
+                try writer.writeAll(";\n");
+            }
+        }
+    }
 }
 
 pub fn emitEnum(_: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
