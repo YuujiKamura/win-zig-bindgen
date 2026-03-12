@@ -1107,6 +1107,7 @@ pub fn emitDelegate(allocator: std.mem.Allocator, writer: anytype, ctx: Context,
     if (is_winrt) {
         try emitInterface(allocator, writer, ctx, "", type_name, null);
         try emitDelegateImpl(writer, type_name);
+        try writer.print("pub const IID_{s} = {s}.IID;\n\n", .{ type_name, type_name });
         return;
     }
 

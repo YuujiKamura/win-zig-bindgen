@@ -74,10 +74,6 @@ fn writePrologueSharedTail(writer: anytype) !void {
         \\
         \\pub const VtblPlaceholder = ?*const anyopaque;
         \\
-        \\pub const IID_RoutedEventHandler = GUID{ .data1 = 0xdae23d85, .data2 = 0x69ca, .data3 = 0x5bdf, .data4 = .{ 0x80, 0x5b, 0x61, 0x61, 0xa3, 0xa2, 0x15, 0xcc } };
-        \\pub const IID_SizeChangedEventHandler = GUID{ .data1 = 0x8d7b1a58, .data2 = 0x14c6, .data3 = 0x51c9, .data4 = .{ 0x89, 0x2c, 0x9f, 0xcc, 0xe3, 0x68, 0xe7, 0x7d } };
-        \\pub const IID_SelectionChangedEventHandler = GUID{ .data1 = 0xa232390d, .data2 = 0x0e34, .data3 = 0x595e, .data4 = .{ 0x89, 0x31, 0xfa, 0x92, 0x8a, 0x99, 0x09, 0xf4 } };
-        \\
         \\pub fn comRelease(self: anytype) void {
         \\    const obj: *IUnknown = @ptrCast(@alignCast(self));
         \\    _ = obj.lpVtbl.Release(@ptrCast(obj));
