@@ -176,3 +176,40 @@ test "WINUI #125: PointerPoint struct emitted via dependency closure from Micros
     try std.testing.expect(std.mem.indexOf(u8, generated, "pub const PointerPoint = extern struct") != null);
     try std.testing.expect(std.mem.indexOf(u8, generated, "pub const IPointerPoint = extern struct") != null);
 }
+
+// ============================================================
+// SZARRAY — array return and input parameter expansion (#18)
+// ============================================================
+
+test "WINUI #18: GetXmlnsDefinitions SZARRAY return expands to count+items out params" {
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IXamlMetadataProvider") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // Wrapper should return struct { count: u32, items: ?*anyopaque }
+    try std.testing.expect(std.mem.indexOf(u8, generated, "count: u32, items: ?*anyopaque") != null);
+}
+
+test "WINUI #18: GetXmlnsDefinitions vtable has *u32 and *?*anyopaque out params" {
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IXamlMetadataProvider") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // Vtable should have: GetXmlnsDefinitions: *const fn (*anyopaque, *u32, *?*anyopaque) callconv(.winapi) HRESULT
+    try std.testing.expect(std.mem.indexOf(u8, generated, "GetXmlnsDefinitions: *const fn (*anyopaque, *u32, *?*anyopaque)") != null);
+}
+
+test "WINUI #18: SZARRAY return does NOT use bare 'SZARRAY' string in output" {
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IXamlMetadataProvider") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // The raw "SZARRAY" marker must never appear in generated output
+    try std.testing.expect(std.mem.indexOf(u8, generated, "SZARRAY") == null);
+}
