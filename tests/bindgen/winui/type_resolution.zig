@@ -64,9 +64,15 @@ test "WINUI IXamlReaderStatics: Load vtable out-param is typed, not anyopaque" {
 // ============================================================
 
 test "WINUI #119: ThemeDictionaries getter resolves GENERICINST IMap, not anyopaque" {
-    // ASPIRATIONAL RED: Generic collection types not yet emitted as concrete types.
-    // Not used by ghostty consumer code. Tracked as future generic-collection backlog.
-    return error.SkipZigTest;
+    const allocator = cache_alloc;
+    const generated = generateWinuiOutput(allocator, "IResourceDictionary") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+    // After Category A fix, GENERICINST IMap`2 should resolve to IMap, not ?*anyopaque
+    const bad = "pub fn ThemeDictionaries(self: *@This()) !*anyopaque";
+    try std.testing.expect(std.mem.indexOf(u8, generated, bad) == null);
 }
 
 // ============================================================

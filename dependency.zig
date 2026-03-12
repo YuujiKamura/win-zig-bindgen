@@ -267,6 +267,8 @@ fn buildMethodVtblSig(
             try allocator.dupe(u8, p_type_raw)
         else if (tp.isKnownStruct(p_type_raw) or std.mem.eql(u8, p_type_raw, "EventRegistrationToken"))
             try allocator.dupe(u8, p_type_raw)
+        else if (tp.isInterfaceType(p_type_raw) or sig_decode.isComObjectType(parent_ctx, p_type_raw))
+            try allocator.dupe(u8, "?*anyopaque")
         else
             try allocator.dupe(u8, "?*anyopaque");
         defer allocator.free(p_type_vtbl);

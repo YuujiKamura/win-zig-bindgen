@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-10T09:35:18.5124955Z",
+  "generated_at": "2026-03-12T04:51:27.1920456Z",
   "winmd_version": "1.6.250108002",
   "results": [
     {
@@ -247,32 +247,32 @@
       "short_name": "RoutedEventHandler",
       "anyopaque_count": 6,
       "placeholder_count": 0,
-      "not_implemented_count": 1,
-      "status": "DEGRADED"
+      "not_implemented_count": 0,
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.SizeChangedEventHandler",
       "short_name": "SizeChangedEventHandler",
       "anyopaque_count": 6,
       "placeholder_count": 0,
-      "not_implemented_count": 1,
-      "status": "DEGRADED"
+      "not_implemented_count": 0,
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.SelectionChangedEventHandler",
       "short_name": "SelectionChangedEventHandler",
       "anyopaque_count": 6,
       "placeholder_count": 0,
-      "not_implemented_count": 1,
-      "status": "DEGRADED"
+      "not_implemented_count": 0,
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.Primitives.ScrollEventHandler",
       "short_name": "ScrollEventHandler",
       "anyopaque_count": 6,
       "placeholder_count": 0,
-      "not_implemented_count": 1,
-      "status": "DEGRADED"
+      "not_implemented_count": 0,
+      "status": "OK"
     },
     {
       "type": "Microsoft.UI.Xaml.Controls.Orientation",
@@ -357,7 +357,7 @@
   ],
   "summary": {
     "total": 44,
-    "ok": 40,
-    "degraded": 4
+    "ok": 44,
+    "degraded": 0
   }
 }

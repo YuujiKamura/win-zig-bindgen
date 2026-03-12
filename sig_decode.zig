@@ -272,7 +272,10 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
                             const iface_dot = std.mem.lastIndexOfScalar(u8, iface_full, '.') orelse 0;
                             const iface_short = if (iface_dot > 0) iface_full[iface_dot + 1 ..] else iface_full;
                             break :blk try allocator.dupe(u8, iface_short);
-                        } else |_| {}
+                        } else |_| {
+                            // Default interface not found, use class name
+                            break :blk try allocator.dupe(u8, short);
+                        }
                     }
                     if (cat == .interface or cat == .delegate) break :blk try allocator.dupe(u8, short);
                 }
@@ -330,8 +333,8 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
                 } else {
                     try ctx.registerDependency(allocator, short);
                 }
-                // ABI-level: generic instantiations are opaque pointers for now
-                break :blk try allocator.dupe(u8, "?*anyopaque");
+                // Return the trimmed type name; Stage 2 in emit.zig handles ABI ?*anyopaque conversion
+                break :blk try allocator.dupe(u8, short);
             }
 
             try ctx.registerDependency(allocator, full);
@@ -374,6 +377,13 @@ pub fn decodeSigType(allocator: std.mem.Allocator, ctx: Context, c: *SigCursor, 
 
             break :blk try allocator.dupe(u8, "?*anyopaque");
         },
+        0x13, 0x1e => blk: {
+            // VAR / MVAR: generic type/method parameter — consume the index
+            _ = c.readCompressedUInt();
+            break :blk try allocator.dupe(u8, "?*anyopaque");
+        },
+        0x18 => try allocator.dupe(u8, "isize"),
+        0x19 => try allocator.dupe(u8, "usize"),
         else => try allocator.dupe(u8, "?*anyopaque"),
     };
 }
