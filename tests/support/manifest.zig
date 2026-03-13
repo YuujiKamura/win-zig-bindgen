@@ -20,6 +20,20 @@ pub const SymbolKind = enum {
     alias,
 };
 
+/// Signature info for a single vtable slot.
+pub const VtableSig = struct {
+    /// Number of parameters excluding the implicit `this` pointer.
+    /// null means the slot is a stub (usize in Rust, VtblPlaceholder in Zig).
+    param_count: ?u32 = null,
+    /// Normalized return type string (e.g. "HRESULT", "u32", "void").
+    /// null means the slot is a stub.
+    return_type: ?[]const u8 = null,
+
+    pub fn isStub(self: VtableSig) bool {
+        return self.param_count == null and self.return_type == null;
+    }
+};
+
 pub const TypeShape = struct {
     name: []const u8,
     kind: SymbolKind,
@@ -29,6 +43,7 @@ pub const TypeShape = struct {
     fields: std.ArrayList([]const u8) = .empty,
     methods: std.ArrayList([]const u8) = .empty,
     vtable_methods: std.ArrayList([]const u8) = .empty,
+    vtable_sigs: std.ArrayList(VtableSig) = .empty,
     enum_variants: std.ArrayList([]const u8) = .empty,
     required_ifaces: std.ArrayList([]const u8) = .empty,
 
@@ -44,6 +59,10 @@ pub const TypeShape = struct {
         freeSliceList(allocator, &self.fields);
         freeSliceList(allocator, &self.methods);
         freeSliceList(allocator, &self.vtable_methods);
+        for (self.vtable_sigs.items) |sig| {
+            if (sig.return_type) |rt| allocator.free(rt);
+        }
+        self.vtable_sigs.deinit(allocator);
         freeSliceList(allocator, &self.enum_variants);
         freeSliceList(allocator, &self.required_ifaces);
     }
@@ -87,7 +106,20 @@ pub const Manifest = struct {
     }
 
     pub fn addVtableMethod(self: *Manifest, type_index: usize, name: []const u8) !void {
-        try appendUniqueStr(self.allocator, &self.types.items[type_index].vtable_methods, name);
+        if (containsStr(self.types.items[type_index].vtable_methods.items, name)) return;
+        try self.types.items[type_index].vtable_methods.append(self.allocator, try self.allocator.dupe(u8, name));
+        // Append a stub signature as placeholder (no signature info)
+        try self.types.items[type_index].vtable_sigs.append(self.allocator, .{});
+    }
+
+    pub fn addVtableMethodWithSig(self: *Manifest, type_index: usize, name: []const u8, sig: VtableSig) !void {
+        if (containsStr(self.types.items[type_index].vtable_methods.items, name)) return;
+        try self.types.items[type_index].vtable_methods.append(self.allocator, try self.allocator.dupe(u8, name));
+        const stored_sig = VtableSig{
+            .param_count = sig.param_count,
+            .return_type = if (sig.return_type) |rt| try self.allocator.dupe(u8, rt) else null,
+        };
+        try self.types.items[type_index].vtable_sigs.append(self.allocator, stored_sig);
     }
 
     pub fn addEnumVariant(self: *Manifest, type_index: usize, name: []const u8) !void {
@@ -105,6 +137,141 @@ pub const Manifest = struct {
         return null;
     }
 };
+
+// ============================================================
+// Vtable signature extraction helpers
+// ============================================================
+
+/// Normalize a return type string to a common representation across Rust/Zig.
+/// Maps Rust types to their Zig equivalents for comparison.
+fn normalizeReturnType(raw: []const u8) []const u8 {
+    // Normalize HRESULT variants across Rust (windows_core::HRESULT, windows_sys::core::HRESULT) and Zig
+    if (std.mem.eql(u8, raw, "HRESULT")) return "HRESULT";
+    if (std.mem.endsWith(u8, raw, "::HRESULT")) return "HRESULT";
+    if (std.mem.eql(u8, raw, "u32")) return "u32";
+    if (std.mem.eql(u8, raw, "i32")) return "i32";
+    if (std.mem.eql(u8, raw, "usize")) return "usize";
+    if (std.mem.eql(u8, raw, "void")) return "void";
+    if (std.mem.eql(u8, raw, "u64")) return "u64";
+    if (std.mem.eql(u8, raw, "i64")) return "i64";
+    if (std.mem.eql(u8, raw, "u16")) return "u16";
+    if (std.mem.eql(u8, raw, "i16")) return "i16";
+    if (std.mem.eql(u8, raw, "u8")) return "u8";
+    if (std.mem.eql(u8, raw, "i8")) return "i8";
+    if (std.mem.eql(u8, raw, "bool") or std.mem.eql(u8, raw, "BOOL")) return "BOOL";
+    // Anything else, keep as-is (will be compared loosely)
+    return raw;
+}
+
+/// Count commas at the top level of a parameter list (respecting nested parens/brackets).
+/// Returns the number of parameters. An empty string returns 0.
+/// Handles trailing commas correctly (e.g. "a, b," counts as 2, not 3).
+fn countFnParams(params: []const u8) u32 {
+    const trimmed = std.mem.trim(u8, params, " \t\r\n,");
+    if (trimmed.len == 0) return 0;
+    var count: u32 = 1;
+    var depth: i32 = 0;
+    for (trimmed) |ch| {
+        switch (ch) {
+            '(', '<', '[' => depth += 1,
+            ')', '>', ']' => depth -= 1,
+            ',' => {
+                if (depth == 0) count += 1;
+            },
+            else => {},
+        }
+    }
+    return count;
+}
+
+/// Parse a Rust vtable field signature from a line like:
+///   `pub Close: unsafe extern "system" fn(*mut core::ffi::c_void) -> windows_core::HRESULT,`
+/// or a stub like:
+///   `SetCompleted: usize,`
+/// Returns a VtableSig. For stubs, both fields are null.
+fn parseRustVtblSig(line: []const u8) VtableSig {
+    // Check for usize stub
+    if (std.mem.indexOf(u8, line, ": usize") != null) return .{};
+
+    // Look for "fn(" to find the function signature
+    const fn_marker = std.mem.indexOf(u8, line, " fn(") orelse return .{};
+    const params_start = fn_marker + " fn(".len;
+
+    // Find matching closing paren
+    var depth: i32 = 1;
+    var pos = params_start;
+    while (pos < line.len and depth > 0) : (pos += 1) {
+        if (line[pos] == '(') depth += 1;
+        if (line[pos] == ')') depth -= 1;
+    }
+    if (depth != 0) return .{};
+    const params_end = pos - 1;
+    const params = line[params_start..params_end];
+
+    // Count params, subtract 1 for `this` (first *mut core::ffi::c_void)
+    const total_params = countFnParams(params);
+    const user_params = if (total_params > 0) total_params - 1 else 0;
+
+    // Parse return type: look for " -> " after closing paren
+    const after_paren = line[pos..];
+    const ret_type = if (std.mem.indexOf(u8, after_paren, " -> ")) |arrow| blk: {
+        const rt_start = arrow + " -> ".len;
+        const rt_raw = std.mem.trim(u8, after_paren[rt_start..], " \t,;");
+        break :blk normalizeReturnType(rt_raw);
+    } else "void";
+
+    return .{
+        .param_count = user_params,
+        .return_type = ret_type,
+    };
+}
+
+/// Parse a Zig vtable field signature from a line like:
+///   `QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,`
+/// or a stub like:
+///   `GetIids: VtblPlaceholder,`
+/// Returns a VtableSig.
+fn parseZigVtblSig(line: []const u8) VtableSig {
+    // Check for VtblPlaceholder stub
+    if (std.mem.indexOf(u8, line, "VtblPlaceholder") != null) return .{};
+
+    // Look for "fn (" or "fn(" to find the function signature
+    const fn_marker = std.mem.indexOf(u8, line, "fn (") orelse
+        (std.mem.indexOf(u8, line, "fn(") orelse return .{});
+    const open_paren = std.mem.indexOfScalarPos(u8, line, fn_marker, '(') orelse return .{};
+    const params_start = open_paren + 1;
+
+    // Find matching closing paren
+    var depth: i32 = 1;
+    var pos = params_start;
+    while (pos < line.len and depth > 0) : (pos += 1) {
+        if (line[pos] == '(') depth += 1;
+        if (line[pos] == ')') depth -= 1;
+    }
+    if (depth != 0) return .{};
+    const params_end = pos - 1;
+    const params = line[params_start..params_end];
+
+    // Count params, subtract 1 for `this` (first *anyopaque)
+    const total_params = countFnParams(params);
+    const user_params = if (total_params > 0) total_params - 1 else 0;
+
+    // Parse return type: after "callconv(.winapi) " or after ") "
+    const after_paren = line[pos..];
+    const ret_type = if (std.mem.indexOf(u8, after_paren, "callconv(")) |cc_start| blk: {
+        // Find the closing paren of callconv(...)
+        const cc_close = std.mem.indexOfScalarPos(u8, after_paren, cc_start, ')') orelse break :blk "void";
+        const rest = std.mem.trimLeft(u8, after_paren[cc_close + 1 ..], " \t");
+        const rt_raw = std.mem.trim(u8, rest, " \t,;");
+        if (rt_raw.len == 0) break :blk "void";
+        break :blk normalizeReturnType(rt_raw);
+    } else "void";
+
+    return .{
+        .param_count = user_params,
+        .return_type = ret_type,
+    };
+}
 
 // ============================================================
 // Zig generated output parser
@@ -310,7 +477,8 @@ pub fn parseGeneratedManifest(allocator: std.mem.Allocator, text: []const u8) !M
 
         if (in_vtable) {
             if (parseGeneratedFieldName(line)) |vtbl_name| {
-                try manifest.addVtableMethod(type_index, vtbl_name);
+                const sig = parseZigVtblSig(line);
+                try manifest.addVtableMethodWithSig(type_index, vtbl_name, sig);
             }
             vtable_depth += braceDelta(line);
             type_depth += braceDelta(line);
@@ -591,7 +759,67 @@ pub fn parseRustManifest(allocator: std.mem.Allocator, text: []const u8) !Manife
 
         if (current_vtbl) |type_index| {
             if (parseRustVtblFieldName(line)) |field_name| {
-                if (!std.mem.eql(u8, field_name, "base__")) try manifest.addVtableMethod(type_index, field_name);
+                if (!std.mem.eql(u8, field_name, "base__")) {
+                    // For multi-line signatures, we need the accumulated text.
+                    // Collect lines until the entry is complete (balanced parens and ends with comma).
+                    var accum = std.ArrayList(u8).empty;
+                    defer accum.deinit(allocator);
+                    try accum.appendSlice(allocator, line);
+
+                    // Check if signature is complete on this line
+                    var fn_paren_depth: i32 = 0;
+                    var has_fn = false;
+                    for (line) |ch| {
+                        if (ch == '(') fn_paren_depth += 1;
+                        if (ch == ')') fn_paren_depth -= 1;
+                    }
+                    has_fn = std.mem.indexOf(u8, line, " fn(") != null;
+
+                    // If we have "fn(" but parens aren't balanced, accumulate more lines
+                    if (has_fn and fn_paren_depth > 0) {
+                        while (lines.next()) |cont_raw| {
+                            const cont = trimLine(cont_raw);
+                            try accum.append(allocator, ' ');
+                            try accum.appendSlice(allocator, cont);
+                            for (cont) |ch| {
+                                if (ch == '(') fn_paren_depth += 1;
+                                if (ch == ')') fn_paren_depth -= 1;
+                            }
+                            vtbl_depth += braceDelta(cont);
+                            if (fn_paren_depth <= 0) break;
+                        }
+                    }
+
+                    // Also handle trailing-colon case: field name on one line, signature on next lines.
+                    // But NOT for lines that are already complete (e.g. "Type: usize,").
+                    const is_already_complete = std.mem.indexOf(u8, line, ": usize") != null or
+                        (fn_paren_depth == 0 and std.mem.endsWith(u8, std.mem.trimRight(u8, line, " \t"), ","));
+                    if (!has_fn and !is_already_complete) {
+                        // Keep reading until we get the full signature
+                        while (lines.next()) |cont_raw| {
+                            const cont = trimLine(cont_raw);
+                            try accum.append(allocator, ' ');
+                            try accum.appendSlice(allocator, cont);
+                            vtbl_depth += braceDelta(cont);
+                            for (cont) |ch| {
+                                if (ch == '(') fn_paren_depth += 1;
+                                if (ch == ')') fn_paren_depth -= 1;
+                            }
+                            // Stop when we have a complete fn signature or hit a comma/closing brace
+                            if (std.mem.indexOf(u8, cont, " fn(") != null or
+                                std.mem.indexOf(u8, cont, "usize") != null)
+                            {
+                                has_fn = true;
+                            }
+                            if (has_fn and fn_paren_depth <= 0) break;
+                            if (!has_fn and (std.mem.endsWith(u8, std.mem.trimRight(u8, cont, " \t"), ",") or
+                                std.mem.endsWith(u8, std.mem.trimRight(u8, cont, " \t"), "}"))) break;
+                        }
+                    }
+
+                    const sig = parseRustVtblSig(accum.items);
+                    try manifest.addVtableMethodWithSig(type_index, field_name, sig);
+                }
             }
             vtbl_depth += braceDelta(line);
             if (vtbl_depth <= 0) current_vtbl = null;
@@ -661,6 +889,40 @@ fn compareExpectedList(
     return fail_count;
 }
 
+/// Compare two VtableSig values. Returns true if they are compatible.
+/// Stubs in either side are always compatible (no info to compare).
+/// When both sides have signatures, compare param_count and return_type.
+///
+/// Handles the "UDT return" pattern: Rust uses an out-pointer parameter with
+/// void return, while Zig may return the value directly (one fewer param,
+/// non-void return). This is a legitimate cross-language ABI difference.
+fn signaturesMatch(expected_sig: VtableSig, actual_sig: VtableSig) bool {
+    // If either is a stub, we can't compare — treat as compatible
+    if (expected_sig.isStub() or actual_sig.isStub()) return true;
+
+    const exp_pc = expected_sig.param_count orelse return true;
+    const act_pc = actual_sig.param_count orelse return true;
+    const exp_rt = expected_sig.return_type orelse return true;
+    const act_rt = actual_sig.return_type orelse return true;
+
+    // Exact match
+    if (exp_pc == act_pc and std.mem.eql(u8, exp_rt, act_rt)) return true;
+
+    // UDT return pattern: Rust has N params + void return,
+    // Zig has N-1 params + concrete return type.
+    // The last Rust param is an out-pointer for the return value.
+    if (exp_pc > 0 and act_pc + 1 == exp_pc) {
+        if (std.mem.eql(u8, exp_rt, "void") and !std.mem.eql(u8, act_rt, "void")) return true;
+    }
+
+    // SZARRAY pattern: Rust expands array params as (len, ptr) = 2 params,
+    // Zig may keep them as a single slice/SZARRAY param.
+    // Allow expected to have more params than actual when return types match.
+    if (exp_pc > act_pc and std.mem.eql(u8, exp_rt, act_rt)) return true;
+
+    return false;
+}
+
 /// Order-sensitive comparison for vtable method slots.
 ///
 /// Rust golden files skip `base__` (inherited parent vtable slots), so the
@@ -676,6 +938,8 @@ fn compareVtableSlotOrder(
     owner: []const u8,
     expected: []const []const u8,
     actual: []const []const u8,
+    expected_sigs: []const VtableSig,
+    actual_sigs: []const VtableSig,
 ) usize {
     if (expected.len == 0) return 0;
 
@@ -731,13 +995,33 @@ fn compareVtableSlotOrder(
         return fail_count;
     }
 
-    // Positional comparison from offset
+    // Positional comparison from offset (name + signature)
     for (0..expected.len) |i| {
-        if (std.mem.eql(u8, expected[i], actual[base_offset + i])) continue;
-        std.log.err("[{s}] vtable slot {d} on {s}: expected '{s}', got '{s}'", .{
-            case_id, base_offset + i, owner, expected[i], actual[base_offset + i],
-        });
-        fail_count += 1;
+        if (!std.mem.eql(u8, expected[i], actual[base_offset + i])) {
+            std.log.err("[{s}] vtable slot {d} on {s}: expected '{s}', got '{s}'", .{
+                case_id, base_offset + i, owner, expected[i], actual[base_offset + i],
+            });
+            fail_count += 1;
+            continue; // name mismatch, skip sig comparison for this slot
+        }
+
+        // Compare signatures if both sides have signature data
+        if (i < expected_sigs.len and (base_offset + i) < actual_sigs.len) {
+            const exp_sig = expected_sigs[i];
+            const act_sig = actual_sigs[base_offset + i];
+            if (!signaturesMatch(exp_sig, act_sig)) {
+                const exp_pc = if (exp_sig.param_count) |pc| pc else 0;
+                const act_pc = if (act_sig.param_count) |pc| pc else 0;
+                const exp_rt = exp_sig.return_type orelse "?";
+                const act_rt = act_sig.return_type orelse "?";
+                std.log.err("[{s}] vtable sig mismatch slot {d} '{s}' on {s}: expected params={d} ret={s}, got params={d} ret={s}", .{
+                    case_id, base_offset + i, expected[i], owner,
+                    exp_pc, exp_rt,
+                    act_pc, act_rt,
+                });
+                fail_count += 1;
+            }
+        }
     }
 
     return fail_count;
@@ -783,7 +1067,7 @@ pub fn compareManifests(case_id: []const u8, expected: *const Manifest, actual: 
 
         fail_count += compareExpectedList(case_id, exp_type.name, "field", exp_type.fields.items, act_type.fields.items);
         fail_count += compareExpectedList(case_id, exp_type.name, "method", exp_type.methods.items, act_type.methods.items);
-        fail_count += compareVtableSlotOrder(case_id, exp_type.name, exp_type.vtable_methods.items, act_type.vtable_methods.items);
+        fail_count += compareVtableSlotOrder(case_id, exp_type.name, exp_type.vtable_methods.items, act_type.vtable_methods.items, exp_type.vtable_sigs.items, act_type.vtable_sigs.items);
         fail_count += compareExpectedList(case_id, exp_type.name, "enum variant", exp_type.enum_variants.items, act_type.enum_variants.items);
         fail_count += compareExpectedList(case_id, exp_type.name, "required interface", exp_type.required_ifaces.items, act_type.required_ifaces.items);
     }
