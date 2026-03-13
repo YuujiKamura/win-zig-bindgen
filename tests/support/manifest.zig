@@ -524,13 +524,22 @@ fn parseRustFieldLikeName(line: []const u8) ?[]const u8 {
 }
 
 fn parseRustVtblFieldName(line: []const u8) ?[]const u8 {
-    if (std.mem.indexOf(u8, line, ": unsafe extern") == null and
-        std.mem.indexOf(u8, line, ": usize") == null and
-        std.mem.indexOf(u8, line, ": Option<") == null and
-        std.mem.indexOf(u8, line, ": *const") == null)
-    {
-        return null;
-    }
+    // Check for single-line type specifications
+    const has_type_on_line = (std.mem.indexOf(u8, line, ": unsafe extern") != null or
+        std.mem.indexOf(u8, line, ": usize") != null or
+        std.mem.indexOf(u8, line, ": Option<") != null or
+        std.mem.indexOf(u8, line, ": *const") != null);
+
+    // Also handle multi-line declarations where "pub Name:" or "Name:" ends the line
+    // and the type (e.g. "unsafe extern ...") continues on the next line.
+    const is_trailing_colon = blk: {
+        if (has_type_on_line) break :blk false;
+        const trimmed = std.mem.trimRight(u8, line, " \t,");
+        break :blk (trimmed.len > 0 and trimmed[trimmed.len - 1] == ':');
+    };
+
+    if (!has_type_on_line and !is_trailing_colon) return null;
+
     const name = parseRustFieldLikeName(line) orelse return null;
     if (!(std.mem.startsWith(u8, line, "pub ") or std.mem.eql(u8, name, "base__") or std.ascii.isUpper(name[0]))) return null;
     return name;
