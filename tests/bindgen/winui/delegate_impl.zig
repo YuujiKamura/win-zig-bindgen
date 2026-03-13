@@ -5,6 +5,17 @@ const std = @import("std");
 const support = @import("test_support");
 const generateWinuiOutput = support.winui.generateWinuiOutput;
 
+fn extractBlock(
+    text: []const u8,
+    start_marker: []const u8,
+    end_marker: []const u8,
+) ![]const u8 {
+    const start = std.mem.indexOf(u8, text, start_marker) orelse return error.TestUnexpectedResult;
+    const tail = text[start..];
+    const end_rel = std.mem.indexOf(u8, tail, end_marker) orelse return error.TestUnexpectedResult;
+    return tail[0 .. end_rel + end_marker.len];
+}
+
 test "WINUI RoutedEventHandler: has Impl companion function" {
     const allocator = std.testing.allocator;
     const generated = generateWinuiOutput(allocator, "RoutedEventHandler") catch |e| {
@@ -74,4 +85,37 @@ test "WINUI SelectionChangedEventHandler: has Impl companion function" {
     };
     defer allocator.free(generated);
     try std.testing.expect(std.mem.indexOf(u8, generated, "SelectionChangedEventHandlerImpl(") != null);
+}
+
+test "WINUI RoutedEventHandler: Impl vtable_instance omits IInspectable slots" {
+    const allocator = std.testing.allocator;
+    const generated = generateWinuiOutput(allocator, "RoutedEventHandler") catch |e| {
+        if (e == error.SkipZigTest) return e;
+        return e;
+    };
+    defer allocator.free(generated);
+
+    const block = try extractBlock(
+        generated,
+        "pub fn RoutedEventHandlerImpl(comptime Context: type, comptime CallbackFn: type) type {\n",
+        "        pub fn create(allocator: @import(\"std\").mem.Allocator, context: *Context, callback: CallbackFn) !*Self {\n",
+    );
+    const vtable_instance = try extractBlock(
+        block,
+        "        const vtable_instance = Delegate.VTable{\n",
+        "        };\n",
+    );
+
+    try std.testing.expect(std.mem.indexOf(u8, vtable_instance, ".GetIids") == null);
+    try std.testing.expect(std.mem.indexOf(u8, vtable_instance, ".GetRuntimeClassName") == null);
+    try std.testing.expect(std.mem.indexOf(u8, vtable_instance, ".GetTrustLevel") == null);
+
+    const qi = std.mem.indexOf(u8, vtable_instance, "            .QueryInterface =") orelse return error.TestUnexpectedResult;
+    const addref = std.mem.indexOf(u8, vtable_instance, "            .AddRef =") orelse return error.TestUnexpectedResult;
+    const release = std.mem.indexOf(u8, vtable_instance, "            .Release =") orelse return error.TestUnexpectedResult;
+    const invoke = std.mem.indexOf(u8, vtable_instance, "            .Invoke =") orelse return error.TestUnexpectedResult;
+
+    try std.testing.expect(qi < addref);
+    try std.testing.expect(addref < release);
+    try std.testing.expect(release < invoke);
 }
