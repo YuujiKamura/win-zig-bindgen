@@ -352,11 +352,9 @@ pub fn emitInterface(
         }
 
         const prev_count = seen_method_names.get(raw_name_seed) orelse 0;
-        var unique = if (prev_count > 0) try std.fmt.allocPrint(allocator, "{s}_{d}", .{ raw_name_seed, prev_count }) else try allocator.dupe(u8, raw_name_seed);
-        if (std.mem.eql(u8, type_name, "IXamlMetadataProvider") and std.mem.eql(u8, name, "GetXamlType") and prev_count > 0) {
-            allocator.free(unique);
-            unique = try allocator.dupe(u8, "GetXamlType_2");
-        }
+        // Dedup suffix uses prev_count+1 to match Windows naming convention:
+        // first occurrence has no suffix, second gets _2, third gets _3, etc.
+        const unique = if (prev_count > 0) try std.fmt.allocPrint(allocator, "{s}_{d}", .{ raw_name_seed, prev_count + 1 }) else try allocator.dupe(u8, raw_name_seed);
         try seen_method_names.put(try allocator.dupe(u8, raw_name_seed), prev_count + 1);
 
         var norm_name = if (std.mem.indexOfScalar(u8, norm_seed, '_')) |underscore_idx| blk: {
@@ -404,6 +402,13 @@ pub fn emitInterface(
             const iface_inner = if (std.mem.startsWith(u8, wrapper_ret, "*")) wrapper_ret[1..] else wrapper_ret;
             const is_iface_getter = std.mem.startsWith(u8, wrapper_ret, "*") and (tp.isInterfaceType(iface_inner) or sig.isComObjectType(ctx, iface_inner));
             const is_importable_iface = is_iface_getter;
+            // Hardcoded override: IWindow.get_Content and IContentControl.get_Content
+            // return nullable ?*IInspectable because a window/control can legitimately
+            // have no content set. WinRT metadata does NOT distinguish nullable vs
+            // non-nullable interface returns -- the BYREF out-param signature is
+            // identical in both cases (*?*anyopaque). This is domain knowledge that
+            // cannot be inferred from the .winmd file. windows-rs also does not
+            // auto-detect this; it relies on manual annotations. (#152)
             const is_nullable_getter = (std.mem.eql(u8, type_name, "IWindow") or std.mem.eql(u8, type_name, "IContentControl")) and std.mem.eql(u8, name, "get_Content");
 
             if (is_nullable_getter) {
