@@ -24,6 +24,7 @@ pub const TypeShape = struct {
     name: []const u8,
     kind: SymbolKind,
     has_iid: bool = false,
+    iid_value: ?[16]u8 = null,
     has_lpvtable: bool = false,
     fields: std.ArrayList([]const u8) = .empty,
     methods: std.ArrayList([]const u8) = .empty,
@@ -189,6 +190,92 @@ fn finalizeGeneratedType(t: *TypeShape) void {
     }
 }
 
+/// Parse a Zig GUID literal like:
+/// `GUID{ .data1 = 0x96369f54, .data2 = 0x8eb6, .data3 = 0x48f0, .data4 = .{ 0xab, 0xce, ... } }`
+/// into 16 raw bytes (data1 LE, data2 LE, data3 LE, data4 raw).
+fn parseZigGuidValue(line: []const u8) ?[16]u8 {
+    const iid_prefix = "pub const IID = GUID";
+    const start = std.mem.indexOf(u8, line, iid_prefix) orelse return null;
+    const rest = line[start + iid_prefix.len ..];
+
+    var result: [16]u8 = undefined;
+
+    // Parse .data1
+    const d1_start = std.mem.indexOf(u8, rest, ".data1 = 0x") orelse return null;
+    const d1_hex_start = d1_start + ".data1 = 0x".len;
+    const d1_hex_end = std.mem.indexOfScalarPos(u8, rest, d1_hex_start, ',') orelse return null;
+    const d1 = std.fmt.parseUnsigned(u32, rest[d1_hex_start..d1_hex_end], 16) catch return null;
+    std.mem.writeInt(u32, result[0..4], d1, .little);
+
+    // Parse .data2
+    const d2_start = std.mem.indexOfPos(u8, rest, d1_hex_end, ".data2 = 0x") orelse return null;
+    const d2_hex_start = d2_start + ".data2 = 0x".len;
+    const d2_hex_end = std.mem.indexOfScalarPos(u8, rest, d2_hex_start, ',') orelse return null;
+    const d2 = std.fmt.parseUnsigned(u16, rest[d2_hex_start..d2_hex_end], 16) catch return null;
+    std.mem.writeInt(u16, result[4..6], d2, .little);
+
+    // Parse .data3
+    const d3_start = std.mem.indexOfPos(u8, rest, d2_hex_end, ".data3 = 0x") orelse return null;
+    const d3_hex_start = d3_start + ".data3 = 0x".len;
+    const d3_hex_end = std.mem.indexOfScalarPos(u8, rest, d3_hex_start, ',') orelse return null;
+    const d3 = std.fmt.parseUnsigned(u16, rest[d3_hex_start..d3_hex_end], 16) catch return null;
+    std.mem.writeInt(u16, result[6..8], d3, .little);
+
+    // Parse .data4 = .{ 0xNN, 0xNN, ... } (8 bytes)
+    const d4_start = std.mem.indexOfPos(u8, rest, d3_hex_end, ".data4 = .{") orelse return null;
+    var pos = d4_start + ".data4 = .{".len;
+    for (0..8) |i| {
+        // Skip whitespace and find "0x"
+        while (pos < rest.len and (rest[pos] == ' ' or rest[pos] == ',')) : (pos += 1) {}
+        if (pos + 2 >= rest.len) return null;
+        if (rest[pos] != '0' or rest[pos + 1] != 'x') return null;
+        pos += 2;
+        const byte_end = blk: {
+            var e = pos;
+            while (e < rest.len and std.ascii.isHex(rest[e])) : (e += 1) {}
+            break :blk e;
+        };
+        if (byte_end == pos) return null;
+        result[8 + i] = std.fmt.parseUnsigned(u8, rest[pos..byte_end], 16) catch return null;
+        pos = byte_end;
+    }
+
+    return result;
+}
+
+/// Parse a Rust-style hex GUID like `0x96369f54_8eb6_48f0_abce_c1b211e627c3`
+/// into 16 raw bytes (data1 LE, data2 LE, data3 LE, data4 raw).
+fn parseRustGuidHex(hex_str: []const u8) ?[16]u8 {
+    if (!std.mem.startsWith(u8, hex_str, "0x")) return null;
+    // Strip "0x" prefix and all underscores
+    var clean: [32]u8 = undefined;
+    var clean_len: usize = 0;
+    for (hex_str[2..]) |ch| {
+        if (ch == '_') continue;
+        if (!std.ascii.isHex(ch)) break;
+        if (clean_len >= 32) return null;
+        clean[clean_len] = ch;
+        clean_len += 1;
+    }
+    if (clean_len != 32) return null;
+
+    // Parse 32 hex chars: 8 (data1) + 4 (data2) + 4 (data3) + 16 (data4)
+    var result: [16]u8 = undefined;
+    const d1 = std.fmt.parseUnsigned(u32, clean[0..8], 16) catch return null;
+    std.mem.writeInt(u32, result[0..4], d1, .little);
+    const d2 = std.fmt.parseUnsigned(u16, clean[8..12], 16) catch return null;
+    std.mem.writeInt(u16, result[4..6], d2, .little);
+    const d3 = std.fmt.parseUnsigned(u16, clean[12..16], 16) catch return null;
+    std.mem.writeInt(u16, result[6..8], d3, .little);
+
+    // data4: 8 bytes, each is 2 hex chars, stored raw (big-endian order)
+    for (0..8) |i| {
+        result[8 + i] = std.fmt.parseUnsigned(u8, clean[16 + i * 2 .. 16 + i * 2 + 2], 16) catch return null;
+    }
+
+    return result;
+}
+
 pub fn parseGeneratedManifest(allocator: std.mem.Allocator, text: []const u8) !Manifest {
     var manifest = Manifest.init(allocator);
     errdefer manifest.deinit();
@@ -241,7 +328,10 @@ pub fn parseGeneratedManifest(allocator: std.mem.Allocator, text: []const u8) !M
             type_depth += braceDelta(line);
             continue;
         }
-        if (std.mem.startsWith(u8, line, "pub const IID = ")) t.has_iid = true;
+        if (std.mem.startsWith(u8, line, "pub const IID = ")) {
+            t.has_iid = true;
+            if (parseZigGuidValue(line)) |guid| t.iid_value = guid;
+        }
         if (std.mem.startsWith(u8, line, "lpVtbl: *const VTable")) t.has_lpvtable = true;
         if (parseGeneratedRequiredIface(line)) |iface_name| try manifest.addRequiredIface(type_index, iface_name);
 
@@ -293,7 +383,16 @@ fn parseMacroFirstIdent(manifest: *Manifest, text: []const u8, macro_name: []con
             continue;
         };
         const ident = takeIdentifier(first);
-        if (ident.len > 0) _ = try manifest.ensureType(ident, kind);
+        if (ident.len > 0) {
+            const type_index = try manifest.ensureType(ident, kind);
+            // For define_interface!, the third token is the GUID hex literal
+            _ = it.next(); // skip second token (Vtbl name)
+            if (it.next()) |guid_tok| {
+                if (parseRustGuidHex(guid_tok)) |guid| {
+                    manifest.types.items[type_index].iid_value = guid;
+                }
+            }
+        }
         search_from = body_end + 2;
     }
 }
@@ -553,6 +652,88 @@ fn compareExpectedList(
     return fail_count;
 }
 
+/// Order-sensitive comparison for vtable method slots.
+///
+/// Rust golden files skip `base__` (inherited parent vtable slots), so the
+/// expected list contains only the type's own methods.  Zig output inlines
+/// all parent methods, so actual may be longer with inherited slots at the
+/// front.
+///
+/// Strategy: find the offset in `actual` where `expected[0]` first appears,
+/// then verify positional equality from that offset.  If expected is empty
+/// but actual is not, that is fine (all slots are inherited).
+fn compareVtableSlotOrder(
+    case_id: []const u8,
+    owner: []const u8,
+    expected: []const []const u8,
+    actual: []const []const u8,
+) usize {
+    if (expected.len == 0) return 0;
+
+    // Find the offset in actual where the type's own methods begin.
+    // This is where expected[0] should appear.
+    var offset: ?usize = null;
+    for (actual, 0..) |name, i| {
+        if (std.mem.eql(u8, name, expected[0])) {
+            offset = i;
+            break;
+        }
+    }
+
+    if (offset == null) {
+        // expected[0] not found in actual at all — fall back to missing-item report
+        std.log.err("[{s}] vtable method on {s}: expected first slot '{s}' not found in actual", .{
+            case_id, owner, expected[0],
+        });
+        var fail_count: usize = 1;
+        for (expected[1..]) |name| {
+            if (!containsStr(actual, name)) {
+                std.log.err("[{s}] missing vtable method on {s}: {s}", .{ case_id, owner, name });
+                fail_count += 1;
+            }
+        }
+        return fail_count;
+    }
+
+    const base_offset = offset.?;
+    var fail_count: usize = 0;
+
+    // Check that enough slots remain in actual after the offset
+    if (base_offset + expected.len > actual.len) {
+        std.log.err("[{s}] vtable on {s}: expected {d} own slots at offset {d}, but actual only has {d} total", .{
+            case_id, owner, expected.len, base_offset, actual.len,
+        });
+        // Compare what we can, then report missing
+        const available = actual.len - base_offset;
+        for (0..available) |i| {
+            if (!std.mem.eql(u8, expected[i], actual[base_offset + i])) {
+                std.log.err("[{s}] vtable slot {d} on {s}: expected '{s}', got '{s}'", .{
+                    case_id, base_offset + i, owner, expected[i], actual[base_offset + i],
+                });
+                fail_count += 1;
+            }
+        }
+        for (available..expected.len) |i| {
+            std.log.err("[{s}] vtable slot {d} on {s}: expected '{s}', missing in actual", .{
+                case_id, base_offset + i, owner, expected[i],
+            });
+            fail_count += 1;
+        }
+        return fail_count;
+    }
+
+    // Positional comparison from offset
+    for (0..expected.len) |i| {
+        if (std.mem.eql(u8, expected[i], actual[base_offset + i])) continue;
+        std.log.err("[{s}] vtable slot {d} on {s}: expected '{s}', got '{s}'", .{
+            case_id, base_offset + i, owner, expected[i], actual[base_offset + i],
+        });
+        fail_count += 1;
+    }
+
+    return fail_count;
+}
+
 pub fn compareManifests(case_id: []const u8, expected: *const Manifest, actual: *const Manifest, opts: ctx.CompareOptions) usize {
     var fail_count: usize = 0;
 
@@ -571,6 +752,13 @@ pub fn compareManifests(case_id: []const u8, expected: *const Manifest, actual: 
             continue;
         };
 
+        if (exp_type.iid_value != null and act_type.iid_value != null) {
+            if (!std.mem.eql(u8, &exp_type.iid_value.?, &act_type.iid_value.?)) {
+                std.log.err("[{s}] GUID mismatch for {s}", .{ case_id, exp_type.name });
+                fail_count += 1;
+            }
+        }
+
         if (exp_type.kind != .unknown and act_type.kind != .unknown and exp_type.kind != act_type.kind) {
             const is_enum_to_struct = (exp_type.kind == .enum_type and act_type.kind == .struct_type);
             if (!is_enum_to_struct) {
@@ -586,7 +774,7 @@ pub fn compareManifests(case_id: []const u8, expected: *const Manifest, actual: 
 
         fail_count += compareExpectedList(case_id, exp_type.name, "field", exp_type.fields.items, act_type.fields.items);
         fail_count += compareExpectedList(case_id, exp_type.name, "method", exp_type.methods.items, act_type.methods.items);
-        fail_count += compareExpectedList(case_id, exp_type.name, "vtable method", exp_type.vtable_methods.items, act_type.vtable_methods.items);
+        fail_count += compareVtableSlotOrder(case_id, exp_type.name, exp_type.vtable_methods.items, act_type.vtable_methods.items);
         fail_count += compareExpectedList(case_id, exp_type.name, "enum variant", exp_type.enum_variants.items, act_type.enum_variants.items);
         fail_count += compareExpectedList(case_id, exp_type.name, "required interface", exp_type.required_ifaces.items, act_type.required_ifaces.items);
     }
