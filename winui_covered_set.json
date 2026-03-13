@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-12T04:51:27.1920456Z",
+  "generated_at": "2026-03-13T17:28:00.6582378Z",
   "winmd_version": "1.6.250108002",
   "results": [
     {
@@ -37,7 +37,7 @@
     {
       "type": "Microsoft.UI.Xaml.IUIElement",
       "short_name": "IUIElement",
-      "anyopaque_count": 248,
+      "anyopaque_count": 246,
       "placeholder_count": 0,
       "not_implemented_count": 0,
       "status": "OK"
@@ -101,7 +101,7 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.ITextBox",
       "short_name": "ITextBox",
-      "anyopaque_count": 77,
+      "anyopaque_count": 75,
       "placeholder_count": 0,
       "not_implemented_count": 0,
       "status": "OK"
@@ -221,7 +221,7 @@
     {
       "type": "Microsoft.UI.Xaml.Input.IPointerRoutedEventArgs",
       "short_name": "IPointerRoutedEventArgs",
-      "anyopaque_count": 14,
+      "anyopaque_count": 12,
       "placeholder_count": 0,
       "not_implemented_count": 0,
       "status": "OK"
