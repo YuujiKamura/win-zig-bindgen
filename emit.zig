@@ -638,7 +638,12 @@ pub fn emitInterface(
         allocator.free(unique);
     }
 
-    var parent_methods = try dep.collectParentMethods(allocator, ctx, type_row);
+    // For WinRT interfaces, use extends-chain parent methods.
+    // For Win32 COM interfaces, use InterfaceImpl-chain parent methods (recursive).
+    var parent_methods = if (!is_winrt_iface)
+        try dep.collectWin32ComParentMethods(allocator, ctx, type_row)
+    else
+        try dep.collectParentMethods(allocator, ctx, type_row);
     defer {
         for (parent_methods.items) |m| {
             allocator.free(m.raw_name);
@@ -702,7 +707,7 @@ pub fn emitInterface(
     try writer.print("pub const {s} = extern struct {{\n", .{type_name});
     try writer.print("    pub const IID = GUID{{ .data1 = 0x{x:0>8}, .data2 = 0x{x:0>4}, .data3 = 0x{x:0>4}, .data4 = .{{ 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2}, 0x{x:0>2} }} }};\n", .{ std.mem.readInt(u32, guid[0..4], .little), std.mem.readInt(u16, guid[4..6], .little), std.mem.readInt(u16, guid[6..8], .little), guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15] });
     try writer.writeAll("    lpVtbl: *const VTable,\n    pub const VTable = extern struct {\n        QueryInterface: *const fn (*anyopaque, *const GUID, *?*anyopaque) callconv(.winapi) HRESULT,\n        AddRef: *const fn (*anyopaque) callconv(.winapi) u32,\n        Release: *const fn (*anyopaque) callconv(.winapi) u32,\n");
-    if (!is_delegate) {
+    if (!is_delegate and is_winrt_iface) {
         try writer.writeAll("        GetIids: VtblPlaceholder,\n        GetRuntimeClassName: VtblPlaceholder,\n        GetTrustLevel: VtblPlaceholder,\n");
     }
     {
@@ -715,7 +720,12 @@ pub fn emitInterface(
         var slot_idx: u32 = 0;
         // WinRT ABI: vtable contains ONLY own methods + IInspectable base.
         // Required/parent interface methods are accessed via QueryInterface, not inlined.
-        const all_method_lists = [_][]const MethodMeta{methods.items};
+        // Win32 COM ABI: vtable must contain ALL methods from the entire inheritance chain
+        // (grandparent first, then parent, then child's own methods).
+        const all_method_lists = if (!is_delegate and !is_winrt_iface)
+            [2][]const MethodMeta{ parent_methods.items, methods.items }
+        else
+            [2][]const MethodMeta{ &.{}, methods.items };
         for (all_method_lists) |method_list| {
             for (method_list) |m| {
                 if (vtbl_seen.contains(m.raw_name)) {

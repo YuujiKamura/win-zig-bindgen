@@ -225,20 +225,123 @@ pub fn collectInterfaceMethodsByName(
     return result;
 }
 
+/// Collect all ancestor methods for a Win32 COM interface by recursively walking
+/// the InterfaceImpl chain. Returns methods in vtable order: grandparent first,
+/// then parent, then direct parent — excluding IUnknown (already hardcoded).
+pub fn collectWin32ComParentMethods(
+    allocator: std.mem.Allocator,
+    ctx: Context,
+    type_row: u32,
+) !std.ArrayList(MethodMeta) {
+    // First, find the direct parent interface(s) from the InterfaceImpl table
+    var parent_names = std.ArrayList([]const u8).empty;
+    defer {
+        for (parent_names.items) |n| allocator.free(n);
+        parent_names.deinit(allocator);
+    }
+
+    const t = ctx.table_info.getTable(.InterfaceImpl);
+    var row: u32 = 1;
+    while (row <= t.row_count) : (row += 1) {
+        const impl = ctx.table_info.readInterfaceImpl(row) catch continue;
+        if (impl.class != type_row) continue;
+        const iface_tdor = coded.decodeTypeDefOrRef(impl.interface) catch continue;
+        const iface_name = resolveNameRaw(ctx.table_info, ctx.heaps, iface_tdor) catch continue;
+        if (iface_name) |n| {
+            // Skip IUnknown/IInspectable — already hardcoded in vtable base
+            if (std.mem.eql(u8, n, "IUnknown") or std.mem.eql(u8, n, "IInspectable")) continue;
+            const backtick = std.mem.indexOfScalar(u8, n, '`');
+            const clean_name = if (backtick) |bt| n[0..bt] else n;
+            try parent_names.append(allocator, try allocator.dupe(u8, clean_name));
+        }
+    }
+
+    var result = std.ArrayList(MethodMeta).empty;
+
+    // For each parent interface, recursively collect ITS parents first, then its own methods
+    for (parent_names.items) |parent_name| {
+        const loc = ctx.index.findByShortName(parent_name) orelse
+            ctx.index.findByFullName(parent_name) orelse
+            continue;
+
+        const parent_file = ctx.index.fileOf(loc);
+        const parent_ctx = Context.make(ctx.index, loc, ctx.dep_queue, allocator);
+
+        // Recurse: collect grandparent methods first
+        var ancestor_methods = try collectWin32ComParentMethods(allocator, parent_ctx, loc.row);
+        defer ancestor_methods.deinit(allocator);
+        for (ancestor_methods.items) |m| {
+            try result.append(allocator, .{
+                .raw_name = try allocator.dupe(u8, m.raw_name),
+                .norm_name = try allocator.dupe(u8, m.norm_name),
+                .vtbl_sig = try allocator.dupe(u8, m.vtbl_sig),
+                .wrapper_sig = try allocator.dupe(u8, m.wrapper_sig),
+                .wrapper_call = try allocator.dupe(u8, m.wrapper_call),
+                .raw_wrapper_sig = try allocator.dupe(u8, m.raw_wrapper_sig),
+                .raw_wrapper_call = try allocator.dupe(u8, m.raw_wrapper_call),
+            });
+        }
+        // Free ancestor method strings
+        for (ancestor_methods.items) |m| {
+            allocator.free(m.raw_name);
+            allocator.free(m.norm_name);
+            allocator.free(m.vtbl_sig);
+            allocator.free(m.wrapper_sig);
+            allocator.free(m.wrapper_call);
+            allocator.free(m.raw_wrapper_sig);
+            allocator.free(m.raw_wrapper_call);
+        }
+
+        // Then collect this parent's own methods
+        const range = try metadata_nav.methodRange(parent_file.table_info, loc.row);
+        var mi = range.start;
+        while (mi < range.end_exclusive) : (mi += 1) {
+            const m = try parent_file.table_info.readMethodDef(mi);
+            const name = try parent_file.heaps.getString(m.name);
+
+            const vtbl_sig = buildMethodVtblSigEx(allocator, parent_ctx, parent_file, m, false) catch
+                try allocator.dupe(u8, "VtblPlaceholder");
+
+            try result.append(allocator, .{
+                .raw_name = try allocator.dupe(u8, name),
+                .norm_name = try allocator.dupe(u8, name),
+                .vtbl_sig = vtbl_sig,
+                .wrapper_sig = try allocator.dupe(u8, ""),
+                .wrapper_call = try allocator.dupe(u8, ""),
+                .raw_wrapper_sig = try allocator.dupe(u8, ""),
+                .raw_wrapper_call = try allocator.dupe(u8, ""),
+            });
+        }
+    }
+    return result;
+}
+
 /// Build a vtbl_sig string for a method, using the same ABI logic as emit.zig.
 /// Returns e.g. "*const fn (*anyopaque, *f64) callconv(.winapi) HRESULT".
+/// When is_winrt is false (Win32 COM), the return type is kept as-is instead of
+/// converting non-void returns into out parameters.
 fn buildMethodVtblSig(
     allocator: std.mem.Allocator,
     parent_ctx: Context,
     pfile: *const FileEntry,
     m: @import("win_zig_metadata").tables.MethodDefRow,
 ) ![]const u8 {
+    return buildMethodVtblSigEx(allocator, parent_ctx, pfile, m, true);
+}
+
+fn buildMethodVtblSigEx(
+    allocator: std.mem.Allocator,
+    parent_ctx: Context,
+    pfile: *const FileEntry,
+    m: @import("win_zig_metadata").tables.MethodDefRow,
+    is_winrt: bool,
+) ![]const u8 {
     const tp = type_predicates;
     const sig_blob = try pfile.heaps.getBlob(m.signature);
     var sig_c = SigCursor{ .data = sig_blob };
     _ = sig_c.readByte(); // calling convention
     const param_count = sig_c.readCompressedUInt() orelse return error.InvalidSignature;
-    const ret_type_opt = try sig_decode.decodeSigType(allocator, parent_ctx, &sig_c, true);
+    const ret_type_opt = try sig_decode.decodeSigType(allocator, parent_ctx, &sig_c, is_winrt);
     const ret_type_raw = ret_type_opt orelse "void";
     defer if (ret_type_opt != null) allocator.free(ret_type_raw);
 
@@ -249,7 +352,7 @@ fn buildMethodVtblSig(
     var p_idx: u32 = 0;
     while (p_idx < param_count) : (p_idx += 1) {
         _ = (sig_c.pos < sig_c.data.len and sig_c.data[sig_c.pos] == 0x10); // byref check (consumed by decodeSigType)
-        const p_type_opt = try sig_decode.decodeSigType(allocator, parent_ctx, &sig_c, true);
+        const p_type_opt = try sig_decode.decodeSigType(allocator, parent_ctx, &sig_c, is_winrt);
         const p_type_raw = p_type_opt orelse "?*anyopaque";
         defer if (p_type_opt != null) allocator.free(p_type_raw);
 
@@ -277,21 +380,25 @@ fn buildMethodVtblSig(
         try vtbl_params.appendSlice(allocator, p_type_vtbl);
     }
 
-    // WinRT: non-void return becomes out parameter, return type is HRESULT
-    if (!std.mem.eql(u8, ret_type_raw, "void") and !std.mem.startsWith(u8, ret_type_raw, "SZARRAY:")) {
-        const is_known_value = tp.isBuiltinType(ret_type_raw) or tp.isKnownStruct(ret_type_raw) or std.mem.eql(u8, ret_type_raw, "EventRegistrationToken");
-        if (!is_known_value) {
-            try vtbl_params.appendSlice(allocator, ", *?*anyopaque");
-        } else {
-            const out_type = try std.fmt.allocPrint(allocator, ", *{s}", .{ret_type_raw});
-            defer allocator.free(out_type);
-            try vtbl_params.appendSlice(allocator, out_type);
+    if (is_winrt) {
+        // WinRT: non-void return becomes out parameter, return type is always HRESULT
+        if (!std.mem.eql(u8, ret_type_raw, "void") and !std.mem.startsWith(u8, ret_type_raw, "SZARRAY:")) {
+            const is_known_value = tp.isBuiltinType(ret_type_raw) or tp.isKnownStruct(ret_type_raw) or std.mem.eql(u8, ret_type_raw, "EventRegistrationToken");
+            if (!is_known_value) {
+                try vtbl_params.appendSlice(allocator, ", *?*anyopaque");
+            } else {
+                const out_type = try std.fmt.allocPrint(allocator, ", *{s}", .{ret_type_raw});
+                defer allocator.free(out_type);
+                try vtbl_params.appendSlice(allocator, out_type);
+            }
+        } else if (std.mem.startsWith(u8, ret_type_raw, "SZARRAY:")) {
+            try vtbl_params.appendSlice(allocator, ", *u32, *?*anyopaque");
         }
-    } else if (std.mem.startsWith(u8, ret_type_raw, "SZARRAY:")) {
-        try vtbl_params.appendSlice(allocator, ", *u32, *?*anyopaque");
+        return std.fmt.allocPrint(allocator, "*const fn ({s}) callconv(.winapi) HRESULT", .{vtbl_params.items});
+    } else {
+        // Win32 COM: keep the actual return type as-is (no out-param conversion)
+        return std.fmt.allocPrint(allocator, "*const fn ({s}) callconv(.winapi) {s}", .{ vtbl_params.items, ret_type_raw });
     }
-
-    return std.fmt.allocPrint(allocator, "*const fn ({s}) callconv(.winapi) HRESULT", .{vtbl_params.items});
 }
 
 // ---------------------------------------------------------------------------

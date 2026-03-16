@@ -137,6 +137,11 @@ pub fn build(b: *std.Build) void {
         b.step(entry[0], entry[1]).dependOn(&b.addRunArtifact(bin).step);
     }
 
+    // TSF (Text Services Framework) generation test
+    const tsf_bin = TestBin.add(b, "test-tsf", b.path("tests/bindgen/tsf_gen.zig"), target, optimize, test_support_module, metadata_module, main_module, &.{});
+    const test_tsf_step = b.step("test-tsf", "Run TSF COM interface generation tests");
+    test_tsf_step.dependOn(&b.addRunArtifact(tsf_bin).step);
+
     const test_all_step = b.step("test-all", "Run unit tests, audit, and parity suites");
     test_all_step.dependOn(test_step);
     test_all_step.dependOn(audit_step);
