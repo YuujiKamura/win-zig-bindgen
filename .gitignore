@@ -6,3 +6,6 @@ tmp/
 *.obj
 *.ilk
 *.exe
+
+LOCAL_APPDATA_FONTCONFIG_CACHE/
+nul
