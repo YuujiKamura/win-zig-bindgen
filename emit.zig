@@ -881,10 +881,24 @@ pub fn emitEnum(_: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u
 }
 
 pub fn emitStruct(allocator: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32) !void {
+    try emitStructInner(allocator, writer, ctx, type_row, 0);
+}
+
+fn emitStructInner(allocator: std.mem.Allocator, writer: anytype, ctx: Context, type_row: u32, indent_level: u32) !void {
     const type_def = try ctx.table_info.readTypeDef(type_row);
     const type_name_raw = try ctx.heaps.getString(type_def.type_name);
     const type_name = if (std.mem.indexOfScalar(u8, type_name_raw, '`')) |bt| type_name_raw[0..bt] else type_name_raw;
-    try writer.print("pub const {s} = extern struct {{\n", .{type_name});
+
+    // Determine if this type is a union (ExplicitLayout) or struct
+    // TypeDef flags layout mask: bits 0-1 (0x03 would be SequentialLayout=0x08? No.)
+    // Actually ECMA-335: tdLayoutMask = 0x18, tdExplicitLayout = 0x10
+    const is_union = (type_def.flags & 0x18) == 0x10;
+    const kind_str = if (is_union) "extern union" else "extern struct";
+
+    const indent = indent_level * 4;
+    try writeIndent(writer, indent);
+    try writer.print("pub const {s} = {s} {{\n", .{ type_name, kind_str });
+
     const range = try nav.fieldRange(ctx.table_info, type_row);
     var ii = range.start;
     while (ii < range.end_exclusive) : (ii += 1) {
@@ -896,9 +910,29 @@ pub fn emitStruct(allocator: std.mem.Allocator, writer: anytype, ctx: Context, t
         const ty_opt = try sig.decodeSigType(allocator, ctx, &sig_c, false);
         const ty = ty_opt orelse "?*anyopaque";
         defer if (ty_opt != null) allocator.free(ty);
-        try writer.print("    {s}: {s},\n", .{ name, ty });
+        try writeIndent(writer, indent + 4);
+        try writer.print("{s}: {s},\n", .{ name, ty });
     }
-    try writer.writeAll("};\n\n");
+
+    // Emit nested types (unions/structs defined inside this type)
+    const loc = ui.TypeLocation{ .file_idx = ctx.loc.file_idx, .row = type_row };
+    const nested_locs = try ctx.index.getNested(allocator, loc);
+    defer if (nested_locs.len > 0) allocator.free(nested_locs);
+    for (nested_locs) |nested_loc| {
+        try writer.writeByte('\n');
+        try emitStructInner(allocator, writer, ctx, nested_loc.row, indent_level + 1);
+    }
+
+    try writeIndent(writer, indent);
+    try writer.writeAll("};\n");
+    if (indent_level == 0) try writer.writeByte('\n');
+}
+
+fn writeIndent(writer: anytype, spaces: u32) !void {
+    var i: u32 = 0;
+    while (i < spaces) : (i += 1) {
+        try writer.writeByte(' ');
+    }
 }
 
 pub fn emitFunctions(
