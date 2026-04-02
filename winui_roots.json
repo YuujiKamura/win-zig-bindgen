@@ -12,9 +12,9 @@
   },
   "roots": {
     "interfaces": [
-      "Microsoft.UI.Xaml.IApplicationStatics",
-      "Microsoft.UI.Xaml.IApplicationFactory",
       "Microsoft.UI.Xaml.IApplication",
+      "Microsoft.UI.Xaml.IApplicationFactory",
+      "Microsoft.UI.Xaml.IApplicationStatics",
       "Microsoft.UI.Xaml.IWindow",
       "Microsoft.UI.Xaml.IUIElement",
       "Microsoft.UI.Xaml.IFrameworkElement",
@@ -41,7 +41,12 @@
       "Microsoft.UI.Xaml.Input.ICharacterReceivedRoutedEventArgs",
       "Microsoft.UI.Xaml.Input.IPointerRoutedEventArgs",
       "Microsoft.UI.Input.IPointerPoint",
-      "Microsoft.UI.Input.IPointerPointProperties"
+      "Microsoft.UI.Input.IPointerPointProperties",
+      "Microsoft.Windows.ApplicationModel.Resources.IResourceManager",
+      "Microsoft.Windows.ApplicationModel.Resources.IResourceManagerFactory",
+      "Microsoft.UI.Xaml.Media.IVisualTreeHelperStatics",
+      "Microsoft.UI.Composition.ICompositionObject",
+      "Microsoft.UI.Composition.IVisual"
     ],
     "delegates": [
       "Microsoft.UI.Xaml.RoutedEventHandler",
