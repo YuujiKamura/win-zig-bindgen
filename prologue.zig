@@ -1,6 +1,21 @@
 const std = @import("std");
 
-pub fn writePrologue(writer: anytype) !void {
+pub const MetadataSource = struct {
+    path: []const u8,
+    name: []const u8,
+    size: u64,
+    sha256: [32]u8,
+};
+
+pub const GenerationContext = struct {
+    generator_version: []const u8,
+    primary_source: ?MetadataSource = null,
+    companion_sources: []const MetadataSource = &.{},
+    command_line: []const u8 = "",
+};
+
+pub fn writePrologue(writer: anytype, ctx: GenerationContext) !void {
+    try writeProvenanceHeader(writer, ctx);
     try writer.writeAll(
         \\//! WinUI 3 COM interface definitions for Zig.
         \\//! GENERATED CODE - DO NOT EDIT.
@@ -21,7 +36,8 @@ pub fn writePrologue(writer: anytype) !void {
     try writePrologueSharedTail(writer);
 }
 
-pub fn writePrologueWithImport(writer: anytype, winrt_import: []const u8) !void {
+pub fn writePrologueWithImport(writer: anytype, winrt_import: []const u8, ctx: GenerationContext) !void {
+    try writeProvenanceHeader(writer, ctx);
     try writer.print(
         \\//! WinUI 3 COM interface definitions for Zig.
         \\//! GENERATED CODE - DO NOT EDIT.
@@ -31,8 +47,31 @@ pub fn writePrologueWithImport(writer: anytype, winrt_import: []const u8) !void 
         \\pub const HRESULT = winrt.HRESULT;
         \\
     , .{winrt_import});
-    // Write the rest of the prologue (from BOOL onwards, shared with writePrologue)
     try writePrologueSharedTail(writer);
+}
+
+fn writeProvenanceHeader(writer: anytype, ctx: GenerationContext) !void {
+    try writer.writeAll("//! --- WinRT Binding Provenance ---\n");
+    try writer.print("//! Generator: win-zig-bindgen ({s})\n", .{ctx.generator_version});
+    
+    if (ctx.primary_source) |src| {
+        try writer.print("//! Primary WinMD: {s}\n", .{src.path});
+        try writer.writeAll("//!   - SHA256: ");
+        for (src.sha256) |b| try writer.print("{x:0>2}", .{b});
+        try writer.writeAll("\n");
+    }
+
+    for (ctx.companion_sources) |src| {
+        try writer.print("//! Companion WinMD: {s}\n", .{src.path});
+        try writer.writeAll("//!   - SHA256: ");
+        for (src.sha256) |b| try writer.print("{x:0>2}", .{b});
+        try writer.writeAll("\n");
+    }
+
+    if (ctx.command_line.len > 0) {
+        try writer.print("//! Command: {s}\n", .{ctx.command_line});
+    }
+    try writer.writeAll("//! --------------------------------\n\n");
 }
 
 fn writePrologueSharedTail(writer: anytype) !void {

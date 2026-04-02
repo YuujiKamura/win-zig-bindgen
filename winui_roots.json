@@ -41,7 +41,9 @@
       "Microsoft.UI.Xaml.Input.ICharacterReceivedRoutedEventArgs",
       "Microsoft.UI.Xaml.Input.IPointerRoutedEventArgs",
       "Microsoft.UI.Input.IPointerPoint",
-      "Microsoft.UI.Input.IPointerPointProperties"
+      "Microsoft.UI.Input.IPointerPointProperties",
+      "Microsoft.Windows.ApplicationModel.Resources.IResourceManager",
+      "Microsoft.Windows.ApplicationModel.Resources.IResourceManagerFactory"
     ],
     "delegates": [
       "Microsoft.UI.Xaml.RoutedEventHandler",
