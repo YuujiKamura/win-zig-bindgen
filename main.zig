@@ -179,10 +179,12 @@ pub fn findWin32DefaultWinmdAlloc(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 pub fn findXamlWinmdAlloc(allocator: std.mem.Allocator) ![]const u8 {
-    return sdk_discovery.findMicrosoftUiWinmdAlloc(allocator); // Alias for now
+    return sdk_discovery.findMicrosoftUiWinmdAlloc(allocator);
 }
 
 // --- Metadata Validation Helpers ---
+
+pub fn hasTypeDefByNameAlloc(allocator: std.mem.Allocator, winmd_path: []const u8, full_name: []const u8) !bool {
     const data = try std.fs.cwd().readFileAlloc(allocator, winmd_path, std.math.maxInt(usize));
     defer allocator.free(data);
     const pe_info = try pe.parse(allocator, data);
