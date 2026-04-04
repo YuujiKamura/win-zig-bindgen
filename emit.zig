@@ -711,7 +711,7 @@ pub fn emitInterface(
         try writer.writeAll("        GetIids: VtblPlaceholder,\n        GetRuntimeClassName: VtblPlaceholder,\n        GetTrustLevel: VtblPlaceholder,\n");
     }
     {
-        var vtbl_seen = std.StringHashMap(void).init(allocator);
+        var vtbl_seen = std.StringHashMap(u32).init(allocator);
         defer {
             var kit = vtbl_seen.keyIterator();
             while (kit.next()) |k| allocator.free(k.*);
@@ -729,10 +729,28 @@ pub fn emitInterface(
         for (all_method_lists) |method_list| {
             for (method_list) |m| {
                 if (vtbl_seen.contains(m.raw_name)) {
-                    try writer.print("        _reserved_slot_{d}: VtblPlaceholder,\n", .{slot_idx});
+                    if (is_winrt_iface) {
+                        // WinRT: duplicate names are reserved slots (shouldn't happen in practice)
+                        try writer.print("        _reserved_slot_{d}: VtblPlaceholder,\n", .{slot_idx});
+                    } else {
+                        // Win32 COM: overridden methods with same name occupy their own vtable slot.
+                        // Append _N suffix to avoid Zig field name collision.
+                        const count = vtbl_seen.get(m.raw_name).?;
+                        const suffixed = try std.fmt.allocPrint(allocator, "{s}_{d}", .{ m.raw_name, count + 1 });
+                        if (std.mem.eql(u8, m.vtbl_sig, "VtblPlaceholder")) {
+                            try writer.print("        {s}: VtblPlaceholder,\n", .{suffixed});
+                        } else {
+                            try writer.print("        {s}: {s},\n", .{ suffixed, m.vtbl_sig });
+                        }
+                        try vtbl_seen.put(try allocator.dupe(u8, m.raw_name), count + 1);
+                    }
                 } else {
-                    try writer.print("        {s}: {s},\n", .{ m.raw_name, m.vtbl_sig });
-                    try vtbl_seen.put(try allocator.dupe(u8, m.raw_name), {});
+                    if (std.mem.eql(u8, m.vtbl_sig, "VtblPlaceholder")) {
+                        try writer.print("        {s}: VtblPlaceholder,\n", .{m.raw_name});
+                    } else {
+                        try writer.print("        {s}: {s},\n", .{ m.raw_name, m.vtbl_sig });
+                    }
+                    try vtbl_seen.put(try allocator.dupe(u8, m.raw_name), 1);
                 }
                 slot_idx += 1;
             }
