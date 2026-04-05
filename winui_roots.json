@@ -52,7 +52,8 @@
       "Microsoft.UI.Xaml.RoutedEventHandler",
       "Microsoft.UI.Xaml.SizeChangedEventHandler",
       "Microsoft.UI.Xaml.Controls.SelectionChangedEventHandler",
-      "Microsoft.UI.Xaml.Controls.Primitives.ScrollEventHandler"
+      "Microsoft.UI.Xaml.Controls.Primitives.ScrollEventHandler",
+      "Windows.Foundation.EventHandler"
     ],
     "enums": [
       "Microsoft.UI.Xaml.Controls.Orientation",

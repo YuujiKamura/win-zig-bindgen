@@ -19,16 +19,17 @@ const SigCursor = sig_decode.SigCursor;
 pub const EventIidResult = struct {
     guid: guidmod.Guid,
     event_suffix: []const u8, // owned, caller must free
+    is_typed: bool,
 };
 
-/// Attempt to compute a TypedEventHandler IID for a method that is an event adder.
+/// Attempt to compute a parameterized EventHandler/TypedEventHandler IID for a method that is an event adder.
 ///
 /// Returns null if:
-/// - The method's first parameter is not a GENERICINST TypedEventHandler`2
+/// - The method's first parameter is not a GENERICINST delegate we handle
 /// - Type resolution fails for any generic argument
 ///
 /// The returned `event_suffix` is allocated and must be freed by the caller.
-pub fn computeTypedEventHandlerIid(
+pub fn computeParameterizedEventHandlerIid(
     allocator: std.mem.Allocator,
     ctx: Context,
     method_row: u32,
@@ -64,30 +65,43 @@ pub fn computeTypedEventHandlerIid(
     const tdor_idx = c.readCompressedUInt() orelse return null;
     const tdor = try coded.decodeTypeDefOrRef(tdor_idx);
 
-    // Resolve the base type name to check if it's TypedEventHandler
+    // Resolve the base type name to check if it's EventHandler/TypedEventHandler
     const base_name = try resolveTypeDefOrRefName(ctx, tdor) orelse return null;
     const is_typed_event_handler = std.mem.eql(u8, base_name, "TypedEventHandler`2") or
         std.mem.eql(u8, base_name, "TypedEventHandler");
-    if (!is_typed_event_handler) return null;
+    const is_event_handler = std.mem.eql(u8, base_name, "EventHandler`1") or
+        std.mem.eql(u8, base_name, "EventHandler");
 
-    // Read generic arg count (should be 2)
+    if (!is_typed_event_handler and !is_event_handler) return null;
+
+    // Read generic arg count
     const gen_arg_count = c.readCompressedUInt() orelse return null;
-    if (gen_arg_count != 2) return null;
+    if (is_typed_event_handler and gen_arg_count != 2) return null;
+    if (is_event_handler and gen_arg_count != 1) return null;
 
-    // Read TSender signature
-    const sender_sig = try readTypeArgWinRTSignature(allocator, ctx, &c) orelse return null;
-    defer allocator.free(sender_sig);
+    // Read generic arguments signatures
+    var signatures = std.ArrayList([]const u8).empty;
+    defer {
+        for (signatures.items) |s| allocator.free(s);
+        signatures.deinit(allocator);
+    }
 
-    // Read TResult signature
-    const result_sig = try readTypeArgWinRTSignature(allocator, ctx, &c) orelse return null;
-    defer allocator.free(result_sig);
+    var i: u32 = 0;
+    while (i < gen_arg_count) : (i += 1) {
+        const sig = try readTypeArgWinRTSignature(allocator, ctx, &c) orelse return null;
+        try signatures.append(allocator, sig);
+    }
 
     // Compute the IID
-    const guid = try guidmod.typedEventHandlerIid(sender_sig, result_sig, allocator);
+    const guid = if (is_typed_event_handler)
+        try guidmod.typedEventHandlerIid(signatures.items[0], signatures.items[1], allocator)
+    else
+        try guidmod.eventHandlerIid(signatures.items[0], allocator);
 
     return EventIidResult{
         .guid = guid,
         .event_suffix = try allocator.dupe(u8, event_suffix),
+        .is_typed = is_typed_event_handler,
     };
 }
 

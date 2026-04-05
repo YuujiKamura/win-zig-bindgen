@@ -114,6 +114,16 @@ pub fn typedEventHandlerIid(sender_sig: []const u8, result_sig: []const u8, allo
     return guidFromSignature(sig);
 }
 
+pub fn eventHandlerIid(result_sig: []const u8, allocator: std.mem.Allocator) !Guid {
+    const sig = try std.fmt.allocPrint(
+        allocator,
+        "pinterface({{96406bdc-2b61-11e0-8a0a-18a905bcc53f}};{s})",
+        .{result_sig},
+    );
+    defer allocator.free(sig);
+    return guidFromSignature(sig);
+}
+
 /// Compute the runtime IID for a non-generic WinRT delegate.
 ///
 /// For non-generic delegates, the GuidAttribute in the WinMD metadata IS the

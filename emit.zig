@@ -824,18 +824,19 @@ pub fn emitInterface(
     }
     try writer.writeAll("};\n\n");
 
-    // Emit TypedEventHandler parameterized IIDs for add_ methods on this interface
+    // Emit EventHandler/TypedEventHandler parameterized IIDs for add_ methods on this interface
     {
         var ei = method_range_info.start;
         while (ei < method_range_info.end_exclusive) : (ei += 1) {
-            const result = event_iid.computeTypedEventHandlerIid(allocator, ctx, ei) catch continue;
+            const result = event_iid.computeParameterizedEventHandlerIid(allocator, ctx, ei) catch continue;
             if (result) |r| {
                 defer allocator.free(r.event_suffix);
+                const prefix = if (r.is_typed) "IID_TypedEventHandler_" else "IID_EventHandler_";
                 // Skip duplicates: different interfaces may have events with the same suffix
                 // (e.g. CharacterReceived on IUIElement vs InputKeyboardSource).
                 // First-emitted wins.
                 if (emitted_event_iids) |set| {
-                    const key = std.fmt.allocPrint(allocator, "IID_TypedEventHandler_{s}", .{r.event_suffix}) catch continue;
+                    const key = std.fmt.allocPrint(allocator, "{s}{s}", .{ prefix, r.event_suffix }) catch continue;
                     if (set.contains(key)) {
                         allocator.free(key);
                         continue;
@@ -845,7 +846,7 @@ pub fn emitInterface(
                         continue;
                     };
                 }
-                try writer.print("pub const IID_TypedEventHandler_{s} = ", .{r.event_suffix});
+                try writer.print("pub const {s}{s} = ", .{ prefix, r.event_suffix });
                 try event_iid.formatGuidLiteral(r.guid, writer);
                 try writer.writeAll(";\n");
             }
