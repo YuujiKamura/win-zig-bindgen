@@ -9,3 +9,4 @@ tmp/
 
 LOCAL_APPDATA_FONTCONFIG_CACHE/
 nul
+.omc/

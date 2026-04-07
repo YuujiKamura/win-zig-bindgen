@@ -72,5 +72,40 @@
   },
   "notes": {
     "derivation": "Extracted from com.zig gen/native re-exports and actual call sites. Does NOT define type shape — shape truth is WinMD + windows-rs."
+  },
+  "facade": {
+    "gen_import": "com_generated.zig",
+    "native_import": "com_native.zig",
+    "helpers": ["VtblPlaceholder", "comRelease", "comQueryInterface", "hrCheck", "isValidComPtr"],
+    "native_overrides": {
+      "IPointerRoutedEventArgs": "WinUI3 pointer interfaces use different IIDs from UWP",
+      "IPointerPoint": "",
+      "IPointerPointProperties": ""
+    },
+    "native_only": [
+      "IVector", "IPropertyValue", "IPropertyValueStatics",
+      "ISwapChainPanelNative", "IWindowNative", "ISplitButton",
+      "IMenuFlyout", "IMenuFlyoutItem", "IMenuFlyoutSeparator",
+      "WindowId", "ContentSizePolicy",
+      "IDesktopWindowXamlSource", "IDesktopWindowXamlSourceFactory",
+      "IDesktopChildSiteBridge", "IClosable"
+    ],
+    "iid_aliases": {
+      "IID_TypedEventHandler_WindowClosed": "gen.IID_TypedEventHandler_Closed",
+      "IID_KeyEventHandler": "gen.KeyEventHandler.IID",
+      "IID_PointerEventHandler": "gen.PointerEventHandler.IID",
+      "IID_CharacterReceivedHandler": "gen.IID_TypedEventHandler_CharacterReceived",
+      "IID_ScrollEventHandler": "gen.ScrollEventHandler.IID",
+      "IID_RangeBaseValueChangedEventHandler": "gen.RangeBaseValueChangedEventHandler.IID",
+      "IID_TappedEventHandler": "gen.TappedEventHandler.IID",
+      "IID_TextChangedEventHandler": "gen.TextChangedEventHandler.IID",
+      "IID_TextCompositionStartedHandler": "gen.IID_TypedEventHandler_TextCompositionStarted",
+      "IID_TextCompositionChangedHandler": "gen.IID_TypedEventHandler_TextCompositionChanged",
+      "IID_TextCompositionEndedHandler": "gen.IID_TypedEventHandler_TextCompositionEnded",
+      "IID_RoutedEventHandler": "gen.IID_RoutedEventHandler",
+      "IID_SizeChangedEventHandler": "gen.IID_SizeChangedEventHandler",
+      "IID_SelectionChangedEventHandler": "gen.IID_SelectionChangedEventHandler",
+      "IID_EventHandler": "gen.IID_EventHandler"
+    }
   }
 }

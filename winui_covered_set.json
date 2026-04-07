@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-03-13T12:21:25.0479581Z",
+  "generated_at": "2026-04-05T00:25:53.3282977Z",
   "winmd_version": "1.6.250108002",
   "results": [
     {
-      "type": "Microsoft.UI.Xaml.IApplicationStatics",
-      "short_name": "IApplicationStatics",
-      "anyopaque_count": 17,
+      "type": "Microsoft.UI.Xaml.IApplication",
+      "short_name": "IApplication",
+      "anyopaque_count": 9,
       "placeholder_count": 0,
       "not_implemented_count": 0,
       "status": "OK"
@@ -19,9 +19,9 @@
       "status": "OK"
     },
     {
-      "type": "Microsoft.UI.Xaml.IApplication",
-      "short_name": "IApplication",
-      "anyopaque_count": 9,
+      "type": "Microsoft.UI.Xaml.IApplicationStatics",
+      "short_name": "IApplicationStatics",
+      "anyopaque_count": 17,
       "placeholder_count": 0,
       "not_implemented_count": 0,
       "status": "OK"
@@ -243,6 +243,46 @@
       "status": "OK"
     },
     {
+      "type": "Microsoft.Windows.ApplicationModel.Resources.IResourceManager",
+      "short_name": "IResourceManager",
+      "anyopaque_count": 12,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Microsoft.Windows.ApplicationModel.Resources.IResourceManagerFactory",
+      "short_name": "IResourceManagerFactory",
+      "anyopaque_count": 4,
+      "placeholder_count": 1,
+      "not_implemented_count": 0,
+      "status": "DEGRADED"
+    },
+    {
+      "type": "Microsoft.UI.Xaml.Media.IVisualTreeHelperStatics",
+      "short_name": "IVisualTreeHelperStatics",
+      "anyopaque_count": 42,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Microsoft.UI.Composition.ICompositionObject",
+      "short_name": "ICompositionObject",
+      "anyopaque_count": 9,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Microsoft.UI.Composition.IVisual",
+      "short_name": "IVisual",
+      "anyopaque_count": 6,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
       "type": "Microsoft.UI.Xaml.RoutedEventHandler",
       "short_name": "RoutedEventHandler",
       "anyopaque_count": 6,
@@ -269,6 +309,14 @@
     {
       "type": "Microsoft.UI.Xaml.Controls.Primitives.ScrollEventHandler",
       "short_name": "ScrollEventHandler",
+      "anyopaque_count": 6,
+      "placeholder_count": 0,
+      "not_implemented_count": 0,
+      "status": "OK"
+    },
+    {
+      "type": "Windows.Foundation.EventHandler",
+      "short_name": "EventHandler",
       "anyopaque_count": 6,
       "placeholder_count": 0,
       "not_implemented_count": 0,
@@ -356,8 +404,8 @@
     }
   ],
   "summary": {
-    "total": 44,
-    "ok": 44,
-    "degraded": 0
+    "total": 50,
+    "ok": 49,
+    "degraded": 1
   }
 }
